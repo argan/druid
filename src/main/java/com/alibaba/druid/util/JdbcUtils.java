@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
  */
 package com.alibaba.druid.util;
 
+import com.alibaba.druid.support.logging.Log;
+import com.alibaba.druid.support.logging.LogFactory;
+
+import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -29,122 +33,113 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import javax.sql.DataSource;
-
-import com.alibaba.druid.support.logging.Log;
-import com.alibaba.druid.support.logging.LogFactory;
-
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
-public final class JdbcUtils {
+public final class JdbcUtils implements JdbcConstants {
 
-    public static final String      MOCK             = "mock";
+    private final static Log        LOG                = LogFactory.getLog(JdbcUtils.class);
 
-    public static final String      HSQL             = "hsql";
+    private static final Properties DRIVER_URL_MAPPING = new Properties();
 
-    public static final String      DB2              = "db2";
-
-    public static final String      POSTGRESQL       = "postgresql";
-
-    public static final String      SYBASE           = "sybase";
-
-    public static final String      SQL_SERVER       = "sqlserver";
-
-    public static final String      ORACLE           = "oracle";
-
-    public static final String      MYSQL            = "mysql";
-
-    public static final String      DERBY            = "derby";
-    
-    public static final String      HBASE            = "hbase";
-    
-    public static final String      HIVE            = "hive";
-
-    private final static Log        LOG              = LogFactory.getLog(JdbcUtils.class);
-
-    private static final Properties driverUrlMapping = new Properties();
+    private static Boolean mysql_driver_version_6      = null;
 
     static {
         try {
-            for (Enumeration<URL> e = Thread.currentThread().getContextClassLoader().getResources("META-INF/druid-driver.properties"); e.hasMoreElements();) {
-                URL url = e.nextElement();
+            ClassLoader ctxClassLoader = Thread.currentThread().getContextClassLoader();
+            if (ctxClassLoader != null) {
+                for (Enumeration<URL> e = ctxClassLoader.getResources("META-INF/druid-driver.properties"); e.hasMoreElements();) {
+                    URL url = e.nextElement();
 
-                Properties property = new Properties();
+                    Properties property = new Properties();
 
-                InputStream is = null;
-                try {
-                    is = url.openStream();
-                    property.load(is);
-                } finally {
-                    JdbcUtils.close(is);
+                    InputStream is = null;
+                    try {
+                        is = url.openStream();
+                        property.load(is);
+                    } finally {
+                        JdbcUtils.close(is);
+                    }
+
+                    DRIVER_URL_MAPPING.putAll(property);
                 }
-
-                driverUrlMapping.putAll(property);
             }
         } catch (Exception e) {
             LOG.error("load druid-driver.properties error", e);
         }
     }
 
-    public final static void close(Connection x) {
-        if (x != null) {
-            try {
-                x.close();
-            } catch (Exception e) {
-                LOG.error("close connection error", e);
-            }
+    public static void close(Connection x) {
+        if (x == null) {
+            return;
+        }
+        try {
+            x.close();
+        } catch (Exception e) {
+            LOG.debug("close connection error", e);
         }
     }
 
-    public final static void close(Statement x) {
-        if (x != null) {
-            try {
-                x.close();
-            } catch (Exception e) {
-                LOG.error("close statement error", e);
-            }
+    public static void close(Statement x) {
+        if (x == null) {
+            return;
+        }
+        try {
+            x.close();
+        } catch (Exception e) {
+            LOG.debug("close statement error", e);
         }
     }
 
-    public final static void close(ResultSet x) {
-        if (x != null) {
-            try {
-                x.close();
-            } catch (Exception e) {
-                LOG.error("close resultset error", e);
-            }
+    public static void close(ResultSet x) {
+        if (x == null) {
+            return;
+        }
+        try {
+            x.close();
+        } catch (Exception e) {
+            LOG.debug("close result set error", e);
         }
     }
 
-    public final static void close(Closeable x) {
-        if (x != null) {
-            try {
-                x.close();
-            } catch (Exception e) {
-                LOG.error("close error", e);
-            }
+    public static void close(Closeable x) {
+        if (x == null) {
+            return;
+        }
+
+        try {
+            x.close();
+        } catch (Exception e) {
+            LOG.debug("close error", e);
         }
     }
 
-    public final static void printResultSet(ResultSet rs) throws SQLException {
+    public static void printResultSet(ResultSet rs) throws SQLException {
         printResultSet(rs, System.out);
     }
+    
+    public static void printResultSet(ResultSet rs, PrintStream out) throws SQLException {
+        printResultSet(rs, out, true, "\t");
+    }
 
-    public final static void printResultSet(ResultSet rs, PrintStream out) throws SQLException {
+    public static void printResultSet(ResultSet rs, PrintStream out, boolean printHeader, String seperator) throws SQLException {
         ResultSetMetaData metadata = rs.getMetaData();
         int columnCount = metadata.getColumnCount();
-        for (int columnIndex = 1; columnIndex <= columnCount; ++columnIndex) {
-            if (columnIndex != 1) {
-                out.print('\t');
+        if (printHeader) {
+            for (int columnIndex = 1; columnIndex <= columnCount; ++columnIndex) {
+                if (columnIndex != 1) {
+                    out.print(seperator);
+                }
+                out.print(metadata.getColumnName(columnIndex));
             }
-            out.print(metadata.getColumnName(columnIndex));
         }
 
         out.println();
@@ -153,7 +148,7 @@ public final class JdbcUtils {
 
             for (int columnIndex = 1; columnIndex <= columnCount; ++columnIndex) {
                 if (columnIndex != 1) {
-                    out.print('\t');
+                    out.print(seperator);
                 }
 
                 int type = metadata.getColumnType(columnIndex);
@@ -216,28 +211,36 @@ public final class JdbcUtils {
                 } else if (type == Types.CLOB) {
                     out.print(String.valueOf(rs.getString(columnIndex)));
                 } else if (type == Types.JAVA_OBJECT) {
-                    Object objec = rs.getObject(columnIndex);
+                    Object object = rs.getObject(columnIndex);
 
                     if (rs.wasNull()) {
                         out.print("null");
                     } else {
-                        out.print(String.valueOf(objec));
+                        out.print(String.valueOf(object));
                     }
                 } else if (type == Types.LONGVARCHAR) {
-                    Object objec = rs.getString(columnIndex);
+                    Object object = rs.getString(columnIndex);
 
                     if (rs.wasNull()) {
                         out.print("null");
                     } else {
-                        out.print(String.valueOf(objec));
+                        out.print(String.valueOf(object));
                     }
+                } else if (type == Types.NULL) {
+                    out.print("null");
                 } else {
-                    Object objec = rs.getObject(columnIndex);
+                    Object object = rs.getObject(columnIndex);
 
                     if (rs.wasNull()) {
                         out.print("null");
                     } else {
-                        out.print(String.valueOf(objec));
+                        if (object instanceof byte[]) {
+                            byte[] bytes = (byte[]) object;
+                            String text = HexBin.encode(bytes);
+                            out.print(text);
+                        } else {
+                            out.print(String.valueOf(object));
+                        }
                     }
                 }
             }
@@ -356,16 +359,35 @@ public final class JdbcUtils {
     }
 
     public static String getDriverClassName(String rawUrl) throws SQLException {
+        if (rawUrl == null) {
+            return null;
+        }
+        
         if (rawUrl.startsWith("jdbc:derby:")) {
             return "org.apache.derby.jdbc.EmbeddedDriver";
         } else if (rawUrl.startsWith("jdbc:mysql:")) {
-            return "com.mysql.jdbc.Driver";
-        } else if (rawUrl.startsWith("jdbc:oracle:")) {
-            return "oracle.jdbc.driver.OracleDriver";
+            if (mysql_driver_version_6 == null) {
+                mysql_driver_version_6 = Utils.loadClass("com.mysql.cj.jdbc.Driver") != null;
+            }
+
+            if (mysql_driver_version_6) {
+                return MYSQL_DRIVER_6;
+            } else {
+                return MYSQL_DRIVER;
+            }
+        } else if (rawUrl.startsWith("jdbc:log4jdbc:")) {
+            return LOG4JDBC_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:mariadb:")) {
+            return MARIADB_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:oracle:") //
+                   || rawUrl.startsWith("JDBC:oracle:")) {
+            return ORACLE_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:alibaba:oracle:")) {
+            return ALI_ORACLE_DRIVER;
         } else if (rawUrl.startsWith("jdbc:microsoft:")) {
             return "com.microsoft.jdbc.sqlserver.SQLServerDriver";
         } else if (rawUrl.startsWith("jdbc:sqlserver:")) {
-            return "com.microsoft.jdbc.sqlserver.SQLServerDriver";
+            return "com.microsoft.sqlserver.jdbc.SQLServerDriver";
         } else if (rawUrl.startsWith("jdbc:sybase:Tds:")) {
             return "com.sybase.jdbc2.jdbc.SybDriver";
         } else if (rawUrl.startsWith("jdbc:jtds:")) {
@@ -373,17 +395,21 @@ public final class JdbcUtils {
         } else if (rawUrl.startsWith("jdbc:fake:") || rawUrl.startsWith("jdbc:mock:")) {
             return "com.alibaba.druid.mock.MockDriver";
         } else if (rawUrl.startsWith("jdbc:postgresql:")) {
-            return "org.postgresql.Driver";
+            return POSTGRESQL_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:edb:")) {
+            return ENTERPRISEDB_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:odps:")) {
+            return ODPS_DRIVER;
         } else if (rawUrl.startsWith("jdbc:hsqldb:")) {
             return "org.hsqldb.jdbcDriver";
         } else if (rawUrl.startsWith("jdbc:db2:")) {
-            return "COM.ibm.db2.jdbc.app.DB2Driver";
+            return DB2_DRIVER;
         } else if (rawUrl.startsWith("jdbc:sqlite:")) {
-            return "org.sqlite.JDBC";
+            return SQLITE_DRIVER;
         } else if (rawUrl.startsWith("jdbc:ingres:")) {
             return "com.ingres.jdbc.IngresDriver";
         } else if (rawUrl.startsWith("jdbc:h2:")) {
-            return "org.h2.Driver";
+            return H2_DRIVER;
         } else if (rawUrl.startsWith("jdbc:mckoi:")) {
             return "com.mckoi.JDBCDriver";
         } else if (rawUrl.startsWith("jdbc:cloudscape:")) {
@@ -410,6 +436,18 @@ public final class JdbcUtils {
             return "ca.edbc.jdbc.EdbcDriver";
         } else if (rawUrl.startsWith("jdbc:mimer:multi1:")) {
             return "com.mimer.jdbc.Driver";
+        } else if (rawUrl.startsWith("jdbc:dm:")) {
+            return JdbcConstants.DM_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:kingbase:")) {
+            return JdbcConstants.KINGBASE_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:hive:")) {
+            return JdbcConstants.HIVE_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:hive2:")) {
+            return JdbcConstants.HIVE_DRIVER;
+        } else if (rawUrl.startsWith("jdbc:phoenix:thin:")) {
+            return "org.apache.phoenix.queryserver.client.Driver";
+        } else if (rawUrl.startsWith("jdbc:phoenix://")) {
+            return JdbcConstants.PHOENIX_DRIVER;
         } else {
             throw new SQLException("unkow jdbc driver : " + rawUrl);
         }
@@ -420,37 +458,48 @@ public final class JdbcUtils {
             return null;
         }
 
-        if (rawUrl.startsWith("jdbc:derby:")) {
+        if (rawUrl.startsWith("jdbc:derby:") || rawUrl.startsWith("jdbc:log4jdbc:derby:")) {
             return DERBY;
-        } else if (rawUrl.startsWith("jdbc:mysql:")) {
+        } else if (rawUrl.startsWith("jdbc:mysql:") || rawUrl.startsWith("jdbc:cobar:")
+                   || rawUrl.startsWith("jdbc:log4jdbc:mysql:")) {
             return MYSQL;
-        } else if (rawUrl.startsWith("jdbc:oracle:")) {
+        } else if (rawUrl.startsWith("jdbc:mariadb:")) {
+            return MARIADB;
+        } else if (rawUrl.startsWith("jdbc:oracle:") || rawUrl.startsWith("jdbc:log4jdbc:oracle:")) {
             return ORACLE;
-        } else if (rawUrl.startsWith("jdbc:microsoft:")) {
+        } else if (rawUrl.startsWith("jdbc:alibaba:oracle:")) {
+            return ALI_ORACLE;
+        } else if (rawUrl.startsWith("jdbc:microsoft:") || rawUrl.startsWith("jdbc:log4jdbc:microsoft:")) {
             return SQL_SERVER;
-        } else if (rawUrl.startsWith("jdbc:sybase:Tds:")) {
+        } else if (rawUrl.startsWith("jdbc:sqlserver:") || rawUrl.startsWith("jdbc:log4jdbc:sqlserver:")) {
+            return SQL_SERVER;
+        } else if (rawUrl.startsWith("jdbc:sybase:Tds:") || rawUrl.startsWith("jdbc:log4jdbc:sybase:")) {
             return SYBASE;
-        } else if (rawUrl.startsWith("jdbc:jtds:")) {
-            return "jtds";
+        } else if (rawUrl.startsWith("jdbc:jtds:") || rawUrl.startsWith("jdbc:log4jdbc:jtds:")) {
+            return JTDS;
         } else if (rawUrl.startsWith("jdbc:fake:") || rawUrl.startsWith("jdbc:mock:")) {
             return MOCK;
-        } else if (rawUrl.startsWith("jdbc:postgresql:")) {
+        } else if (rawUrl.startsWith("jdbc:postgresql:") || rawUrl.startsWith("jdbc:log4jdbc:postgresql:")) {
             return POSTGRESQL;
-        } else if (rawUrl.startsWith("jdbc:hsqldb:")) {
+        } else if (rawUrl.startsWith("jdbc:edb:")) {
+            return ENTERPRISEDB;
+        } else if (rawUrl.startsWith("jdbc:hsqldb:") || rawUrl.startsWith("jdbc:log4jdbc:hsqldb:")) {
             return HSQL;
+        } else if (rawUrl.startsWith("jdbc:odps:")) {
+            return ODPS;
         } else if (rawUrl.startsWith("jdbc:db2:")) {
             return DB2;
         } else if (rawUrl.startsWith("jdbc:sqlite:")) {
-            return "sqlite";
+            return SQLITE;
         } else if (rawUrl.startsWith("jdbc:ingres:")) {
             return "ingres";
-        } else if (rawUrl.startsWith("jdbc:h2:")) {
-            return "h2";
+        } else if (rawUrl.startsWith("jdbc:h2:") || rawUrl.startsWith("jdbc:log4jdbc:h2:")) {
+            return H2;
         } else if (rawUrl.startsWith("jdbc:mckoi:")) {
             return "mckoi";
         } else if (rawUrl.startsWith("jdbc:cloudscape:")) {
             return "cloudscape";
-        } else if (rawUrl.startsWith("jdbc:informix-sqli:")) {
+        } else if (rawUrl.startsWith("jdbc:informix-sqli:") || rawUrl.startsWith("jdbc:log4jdbc:informix-sqli:")) {
             return "informix";
         } else if (rawUrl.startsWith("jdbc:timesten:")) {
             return "timesten";
@@ -472,21 +521,67 @@ public final class JdbcUtils {
             return "edbc";
         } else if (rawUrl.startsWith("jdbc:mimer:multi1:")) {
             return "mimer";
+        } else if (rawUrl.startsWith("jdbc:dm:")) {
+            return JdbcConstants.DM;
+        } else if (rawUrl.startsWith("jdbc:kingbase:")) {
+            return JdbcConstants.KINGBASE;
+        } else if (rawUrl.startsWith("jdbc:log4jdbc:")) {
+            return LOG4JDBC;
+        } else if (rawUrl.startsWith("jdbc:hive:")) {
+            return HIVE;
+        } else if (rawUrl.startsWith("jdbc:hive2:")) {
+            return HIVE;
+        } else if (rawUrl.startsWith("jdbc:phoenix:")) {
+            return PHOENIX;
         } else {
             return null;
         }
     }
 
     public static Driver createDriver(String driverClassName) throws SQLException {
+        return createDriver(null, driverClassName);
+    }
+
+    public static Driver createDriver(ClassLoader classLoader, String driverClassName) throws SQLException {
+        Class<?> clazz = null;
+        if (classLoader != null) {
+            try {
+                clazz = classLoader.loadClass(driverClassName);
+            } catch (ClassNotFoundException e) {
+                // skip
+            }
+        }
+
+        if (clazz == null) {
+            try {
+                ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+                if (contextLoader != null) {
+                    clazz = contextLoader.loadClass(driverClassName);
+                }
+            } catch (ClassNotFoundException e) {
+                // skip
+            }
+        }
+
+        if (clazz == null) {
+            try {
+                clazz = Class.forName(driverClassName);
+            } catch (ClassNotFoundException e) {
+                throw new SQLException(e.getMessage(), e);
+            }
+        }
+
         try {
-            return (Driver) Class.forName(driverClassName).newInstance();
+            return (Driver) clazz.newInstance();
         } catch (IllegalAccessException e) {
             throw new SQLException(e.getMessage(), e);
         } catch (InstantiationException e) {
             throw new SQLException(e.getMessage(), e);
-        } catch (ClassNotFoundException e) {
-            throw new SQLException(e.getMessage(), e);
         }
+    }
+
+    public static int executeUpdate(DataSource dataSource, String sql, Object... parameters) throws SQLException {
+        return executeUpdate(dataSource, sql, Arrays.asList(parameters));
     }
 
     public static int executeUpdate(DataSource dataSource, String sql, List<Object> parameters) throws SQLException {
@@ -516,6 +611,10 @@ public final class JdbcUtils {
         return updateCount;
     }
 
+    public static void execute(DataSource dataSource, String sql, Object... parameters) throws SQLException {
+        execute(dataSource, sql, Arrays.asList(parameters));
+    }
+
     public static void execute(DataSource dataSource, String sql, List<Object> parameters) throws SQLException {
         Connection conn = null;
         try {
@@ -538,6 +637,11 @@ public final class JdbcUtils {
         } finally {
             JdbcUtils.close(stmt);
         }
+    }
+
+    public static List<Map<String, Object>> executeQuery(DataSource dataSource, String sql, Object... parameters)
+                                                                                                                 throws SQLException {
+        return executeQuery(dataSource, sql, Arrays.asList(parameters));
     }
 
     public static List<Map<String, Object>> executeQuery(DataSource dataSource, String sql, List<Object> parameters)
@@ -587,7 +691,51 @@ public final class JdbcUtils {
 
     private static void setParameters(PreparedStatement stmt, List<Object> parameters) throws SQLException {
         for (int i = 0, size = parameters.size(); i < size; ++i) {
-            stmt.setObject(i + 1, parameters.get(i));
+            Object param = parameters.get(i);
+            stmt.setObject(i + 1, param);
         }
+    }
+
+    public static void insertToTable(DataSource dataSource, String tableName, Map<String, Object> data)
+                                                                                                       throws SQLException {
+        Connection conn = null;
+        try {
+            conn = dataSource.getConnection();
+            insertToTable(conn, tableName, data);
+        } finally {
+            close(conn);
+        }
+    }
+
+    public static void insertToTable(Connection conn, String tableName, Map<String, Object> data) throws SQLException {
+        String sql = makeInsertToTableSql(tableName, data.keySet());
+        List<Object> parameters = new ArrayList<Object>(data.values());
+        execute(conn, sql, parameters);
+    }
+
+    public static String makeInsertToTableSql(String tableName, Collection<String> names) {
+        StringBuilder sql = new StringBuilder() //
+        .append("insert into ") //
+        .append(tableName) //
+        .append("("); //
+
+        int nameCount = 0;
+        for (String name : names) {
+            if (nameCount > 0) {
+                sql.append(",");
+            }
+            sql.append(name);
+            nameCount++;
+        }
+        sql.append(") values (");
+        for (int i = 0; i < nameCount; ++i) {
+            if (i != 0) {
+                sql.append(",");
+            }
+            sql.append("?");
+        }
+        sql.append(")");
+
+        return sql.toString();
     }
 }

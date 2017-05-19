@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@ package com.alibaba.druid.sql.ast.expr;
 import com.alibaba.druid.sql.ast.SQLExprImpl;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
-public class SQLNullExpr extends SQLExprImpl implements SQLLiteralExpr {
+import static com.alibaba.druid.sql.visitor.SQLEvalVisitor.EVAL_VALUE_NULL;
 
-    private static final long serialVersionUID = 1L;
+public class SQLNullExpr extends SQLExprImpl implements SQLLiteralExpr, SQLValuableExpr {
 
     public SQLNullExpr(){
 
@@ -42,5 +42,10 @@ public class SQLNullExpr extends SQLExprImpl implements SQLLiteralExpr {
 
     public boolean equals(Object o) {
         return o instanceof SQLNullExpr;
+    }
+
+    @Override
+    public Object getValue() {
+        return EVAL_VALUE_NULL;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,14 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import junit.framework.Assert;
 import junit.framework.TestCase;
+
+import org.junit.Assert;
 
 import com.alibaba.druid.bvt.proxy.DruidDriverTest.PublicJdbcFilterAdapter;
 import com.alibaba.druid.filter.Filter;
-import com.alibaba.druid.proxy.config.AbstractDruidFilterConfig;
-import com.alibaba.druid.proxy.config.DruidFilterConfig;
-import com.alibaba.druid.util.DruidLoaderUtils;
+import com.alibaba.druid.filter.FilterManager;
+import com.alibaba.druid.util.Utils;
 
 /**
  * druidLoader util 测试
@@ -41,42 +41,42 @@ public class DruidLoaderUtilsTest extends TestCase {
         List<Filter> filters = new ArrayList<Filter>();
         // log4j
         String filterItem = "log4j";
-        DruidLoaderUtils.loadFilter(filters, filterItem);
+        FilterManager.loadFilter(filters, filterItem);
         Filter filterConfig = filters.get(0);
         Assert.assertNotNull(filterConfig);
         Assert.assertEquals("com.alibaba.druid.filter.logging.Log4jFilter", filterConfig.getClass().getName());
         // stat
         filterItem = "stat";
         filters.clear();
-        DruidLoaderUtils.loadFilter(filters, filterItem);
+        FilterManager.loadFilter(filters, filterItem);
         filterConfig = filters.get(0);
         Assert.assertNotNull(filterConfig);
         Assert.assertEquals("com.alibaba.druid.filter.stat.StatFilter", filterConfig.getClass().getName());
         // default
         filterItem = "default";
         filters.clear();
-        DruidLoaderUtils.loadFilter(filters, filterItem);
+        FilterManager.loadFilter(filters, filterItem);
         filterConfig = filters.get(0);
         Assert.assertNotNull(filterConfig);
         Assert.assertEquals("com.alibaba.druid.filter.stat.StatFilter", filterConfig.getClass().getName());
         // counter
         filterItem = "stat";
         filters.clear();
-        DruidLoaderUtils.loadFilter(filters, filterItem);
+        FilterManager.loadFilter(filters, filterItem);
         filterConfig = filters.get(0);
         Assert.assertNotNull(filterConfig);
         Assert.assertEquals("com.alibaba.druid.filter.stat.StatFilter", filterConfig.getClass().getName());
         // commonLogging
         filterItem = "commonLogging";
         filters.clear();
-        DruidLoaderUtils.loadFilter(filters, filterItem);
+        FilterManager.loadFilter(filters, filterItem);
         filterConfig = filters.get(0);
         Assert.assertNotNull(filterConfig);
         Assert.assertEquals("com.alibaba.druid.filter.logging.CommonsLogFilter", filterConfig.getClass().getName());
         // encoding
         filterItem = "encoding";
         filters.clear();
-        DruidLoaderUtils.loadFilter(filters, filterItem);
+        FilterManager.loadFilter(filters, filterItem);
         filterConfig = filters.get(0);
         Assert.assertNotNull(filterConfig);
         Assert.assertEquals("com.alibaba.druid.filter.encoding.EncodingConvertFilter",
@@ -84,9 +84,9 @@ public class DruidLoaderUtilsTest extends TestCase {
         // 判定重复
         filterItem = "stat";
         filters.clear();
-        DruidLoaderUtils.loadFilter(filters, filterItem);
+        FilterManager.loadFilter(filters, filterItem);
         filterItem = "default";
-        DruidLoaderUtils.loadFilter(filters, filterItem);
+        FilterManager.loadFilter(filters, filterItem);
         for (Iterator<Filter> iterator = filters.iterator(); iterator.hasNext();) {
             Filter filter = (Filter) iterator.next();
             System.out.println(filter.getClass().getName());
@@ -94,33 +94,13 @@ public class DruidLoaderUtilsTest extends TestCase {
         // default
     }
 
-    public void testLoadFilter2() throws SQLException {
-
-        List<Filter> filterConfigList = new ArrayList<Filter>();
-        List<AbstractDruidFilterConfig> druidFilterConfigList = new ArrayList<AbstractDruidFilterConfig>();
-        DruidFilterConfig druidFilterConfig = new DruidFilterConfig();
-        druidFilterConfig.setClazz("com.alibaba.druid.filter.logging.Log4jFilter");
-        druidFilterConfig.setName("log4j");
-        druidFilterConfigList.add(druidFilterConfig);
-        // log4j
-        DruidLoaderUtils.loadFilter(filterConfigList, druidFilterConfigList);
-        Filter filterConfig = filterConfigList.get(0);
-        Assert.assertNotNull(filterConfig);
-        Assert.assertEquals("com.alibaba.druid.filter.logging.Log4jFilter", filterConfig.getClass().getName());
-
-    }
-
     public void twest_loadClass() throws Exception {
-        Assert.assertEquals(null, DruidLoaderUtils.loadClass(null));
-        Assert.assertEquals(null, DruidLoaderUtils.loadClass2(null));
-        Assert.assertEquals(null, DruidLoaderUtils.loadClass("xxx"));
-        Assert.assertEquals(null, DruidLoaderUtils.loadClass2("xxx"));
+        Assert.assertEquals(null, Utils.loadClass(null));
+        Assert.assertEquals(null, Utils.loadClass("xxx"));
         Assert.assertEquals(PublicJdbcFilterAdapter.class,
-                            DruidLoaderUtils.loadClass(PublicJdbcFilterAdapter.class.getName()));
-        Assert.assertEquals(PublicJdbcFilterAdapter.class,
-                            DruidLoaderUtils.loadClass2(PublicJdbcFilterAdapter.class.getName()));
-        Assert.assertNull(DruidLoaderUtils.loadClass(null));
-        Assert.assertNull(DruidLoaderUtils.loadClass(""));
+                            Utils.loadClass(PublicJdbcFilterAdapter.class.getName()));
+        Assert.assertNull(Utils.loadClass(null));
+        Assert.assertNull(Utils.loadClass(""));
     }
 
 }

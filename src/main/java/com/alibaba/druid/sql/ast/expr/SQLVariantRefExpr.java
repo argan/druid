@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,11 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLVariantRefExpr extends SQLExprImpl {
 
-    private static final long serialVersionUID = 1L;
+    private String  name;
 
-    private String            name;
+    private boolean global = false;
 
-    private boolean           global           = false;
-
-    private int               index            = -1;
+    private int     index  = -1;
 
     public SQLVariantRefExpr(String name){
         this.name = name;

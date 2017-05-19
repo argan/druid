@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,18 +19,17 @@ import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.statement.SQLRollbackStatement;
 import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlASTVisitor;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
+import com.alibaba.druid.util.JdbcConstants;
 
 public class MySqlRollbackStatement extends SQLRollbackStatement implements MySqlStatement {
 
-    private static final long serialVersionUID = 1L;
+    private Boolean chain;
+    private Boolean release;
 
-    private Boolean           chain;
-    private Boolean           release;
-
-    private SQLExpr           force;
+    private SQLExpr force;
 
     public MySqlRollbackStatement(){
-
+        super (JdbcConstants.MYSQL);
     }
 
     public Boolean getChain() {

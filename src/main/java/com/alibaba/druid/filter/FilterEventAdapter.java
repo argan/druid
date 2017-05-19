@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import com.alibaba.druid.proxy.jdbc.ResultSetProxy;
 import com.alibaba.druid.proxy.jdbc.StatementProxy;
 
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public abstract class FilterEventAdapter extends FilterAdapter {
 
@@ -301,8 +301,10 @@ public abstract class FilterEventAdapter extends FilterAdapter {
         try {
             ResultSetProxy resultSet = super.statement_executeQuery(chain, statement, sql);
 
-            statementExecuteQueryAfter(statement, sql, resultSet);
-            resultSetOpenAfter(resultSet);
+            if (resultSet != null) {
+                statementExecuteQueryAfter(statement, sql, resultSet);
+                resultSetOpenAfter(resultSet);
+            }
 
             return resultSet;
         } catch (SQLException error) {
@@ -435,7 +437,7 @@ public abstract class FilterEventAdapter extends FilterAdapter {
         try {
             statementExecuteBefore(statement, statement.getSql());
 
-            boolean firstResult = super.preparedStatement_execute(chain, statement);
+            boolean firstResult = chain.preparedStatement_execute(statement);
 
             this.statementExecuteAfter(statement, statement.getSql(), firstResult);
 
@@ -460,11 +462,13 @@ public abstract class FilterEventAdapter extends FilterAdapter {
         try {
             statementExecuteQueryBefore(statement, statement.getSql());
 
-            ResultSetProxy resultSet = super.preparedStatement_executeQuery(chain, statement);
+            ResultSetProxy resultSet = chain.preparedStatement_executeQuery(statement);
 
-            statementExecuteQueryAfter(statement, statement.getSql(), resultSet);
+            if (resultSet != null) {
+                statementExecuteQueryAfter(statement, statement.getSql(), resultSet);
 
-            resultSetOpenAfter(resultSet);
+                resultSetOpenAfter(resultSet);
+            }
 
             return resultSet;
         } catch (SQLException error) {

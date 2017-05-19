@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,9 @@ import com.alibaba.druid.sql.ast.SQLObjectImpl;
 
 public abstract class SQLTableSourceImpl extends SQLObjectImpl implements SQLTableSource {
 
-    private static final long serialVersionUID = 1L;
+    protected String        alias;
 
-    protected String          alias;
-
-    protected List<SQLHint>   hints            = new ArrayList<SQLHint>(2);
+    protected List<SQLHint> hints;
 
     public SQLTableSourceImpl(){
 
@@ -46,12 +44,22 @@ public abstract class SQLTableSourceImpl extends SQLObjectImpl implements SQLTab
         this.alias = alias;
     }
 
+    public int getHintsSize() {
+        if (hints == null) {
+            return 0;
+        }
+
+        return hints.size();
+    }
+
     public List<SQLHint> getHints() {
+        if (hints == null) {
+            hints = new ArrayList<SQLHint>(2);
+        }
         return hints;
     }
 
     public void setHints(List<SQLHint> hints) {
         this.hints = hints;
     }
-
 }

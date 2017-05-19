@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 package com.alibaba.druid.sql.dialect.oracle.ast.stmt;
 
+import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.statement.SQLExprTableSource;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.FlashbackQueryClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.PartitionExtensionClause;
@@ -24,9 +25,7 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class OracleSelectTableReference extends SQLExprTableSource implements OracleSelectTableSource {
 
-    private static final long          serialVersionUID = 1L;
-
-    private boolean                    only             = false;
+    private boolean                    only = false;
     protected OracleSelectPivotBase    pivot;
 
     protected PartitionExtensionClause partition;
@@ -110,5 +109,9 @@ public class OracleSelectTableReference extends SQLExprTableSource implements Or
         if ((this.alias != null) && (this.alias.length() != 0)) {
             buf.append(this.alias);
         }
+    }
+    
+    public String toString () {
+        return SQLUtils.toOracleString(this);
     }
 }

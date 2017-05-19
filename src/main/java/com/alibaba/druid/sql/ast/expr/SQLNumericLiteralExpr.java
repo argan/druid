@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,11 @@ import com.alibaba.druid.sql.ast.SQLExprImpl;
 
 public abstract class SQLNumericLiteralExpr extends SQLExprImpl implements SQLLiteralExpr {
 
-    private static final long serialVersionUID = 1L;
-
     public SQLNumericLiteralExpr(){
 
     }
 
     public abstract Number getNumber();
-    
+
     public abstract void setNumber(Number number);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,11 @@
  */
 package com.alibaba.druid.pool;
 
-import java.io.ByteArrayInputStream;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.Hashtable;
+import java.util.Map;
 import java.util.Properties;
 import java.util.StringTokenizer;
 
@@ -30,62 +30,81 @@ import javax.naming.Reference;
 import javax.naming.spi.ObjectFactory;
 import javax.sql.DataSource;
 
+import com.alibaba.druid.support.logging.Log;
+import com.alibaba.druid.support.logging.LogFactory;
+
 public class DruidDataSourceFactory implements ObjectFactory {
 
-    static final int              UNKNOWN_TRANSACTIONISOLATION             = -1;
+    private final static Log LOG = LogFactory.getLog(DruidDataSourceFactory.class);
 
-    private final static String   PROP_DEFAULTAUTOCOMMIT                   = "defaultAutoCommit";
-    private final static String   PROP_DEFAULTREADONLY                     = "defaultReadOnly";
-    private final static String   PROP_DEFAULTTRANSACTIONISOLATION         = "defaultTransactionIsolation";
-    private final static String   PROP_DEFAULTCATALOG                      = "defaultCatalog";
-    private final static String   PROP_DRIVERCLASSNAME                     = "driverClassName";
-    private final static String   PROP_MAXACTIVE                           = "maxActive";
-    private final static String   PROP_MAXIDLE                             = "maxIdle";
-    private final static String   PROP_MINIDLE                             = "minIdle";
-    private final static String   PROP_INITIALSIZE                         = "initialSize";
-    private final static String   PROP_MAXWAIT                             = "maxWait";
-    private final static String   PROP_TESTONBORROW                        = "testOnBorrow";
-    private final static String   PROP_TESTONRETURN                        = "testOnReturn";
-    private final static String   PROP_TIMEBETWEENEVICTIONRUNSMILLIS       = "timeBetweenEvictionRunsMillis";
-    private final static String   PROP_NUMTESTSPEREVICTIONRUN              = "numTestsPerEvictionRun";
-    private final static String   PROP_MINEVICTABLEIDLETIMEMILLIS          = "minEvictableIdleTimeMillis";
-    private final static String   PROP_TESTWHILEIDLE                       = "testWhileIdle";
-    private final static String   PROP_PASSWORD                            = "password";
-    private final static String   PROP_URL                                 = "url";
-    private final static String   PROP_USERNAME                            = "username";
-    private final static String   PROP_VALIDATIONQUERY                     = "validationQuery";
-    private final static String   PROP_VALIDATIONQUERY_TIMEOUT             = "validationQueryTimeout";
+    static final int UNKNOWN_TRANSACTIONISOLATION = -1;
 
-    /**
-     * The property name for initConnectionSqls. The associated value String must be of the form [query;]*
-     * 
-     * @since 1.3
-     */
-    private final static String   PROP_INITCONNECTIONSQLS                  = "initConnectionSqls";
-    private final static String   PROP_ACCESSTOUNDERLYINGCONNECTIONALLOWED = "accessToUnderlyingConnectionAllowed";
-    private final static String   PROP_REMOVEABANDONED                     = "removeAbandoned";
-    private final static String   PROP_REMOVEABANDONEDTIMEOUT              = "removeAbandonedTimeout";
-    private final static String   PROP_LOGABANDONED                        = "logAbandoned";
-    private final static String   PROP_POOLPREPAREDSTATEMENTS              = "poolPreparedStatements";
-    private final static String   PROP_MAXOPENPREPAREDSTATEMENTS           = "maxOpenPreparedStatements";
-    private final static String   PROP_CONNECTIONPROPERTIES                = "connectionProperties";
-    private final static String   PROP_FILTERS                             = "filters";
-    private final static String   PROP_EXCEPTION_SORTER                    = "exceptionSorter";
-    private final static String   PROP_EXCEPTION_SORTER_CLASS_NAME         = "exception-sorter-class-name";
+    public final static String PROP_DEFAULTAUTOCOMMIT = "defaultAutoCommit";
+    public final static String PROP_DEFAULTREADONLY = "defaultReadOnly";
+    public final static String PROP_DEFAULTTRANSACTIONISOLATION = "defaultTransactionIsolation";
+    public final static String PROP_DEFAULTCATALOG = "defaultCatalog";
+    public final static String PROP_DRIVERCLASSNAME = "driverClassName";
+    public final static String PROP_MAXACTIVE = "maxActive";
+    public final static String PROP_MAXIDLE = "maxIdle";
+    public final static String PROP_MINIDLE = "minIdle";
+    public final static String PROP_INITIALSIZE = "initialSize";
+    public final static String PROP_MAXWAIT = "maxWait";
+    public final static String PROP_TESTONBORROW = "testOnBorrow";
+    public final static String PROP_TESTONRETURN = "testOnReturn";
+    public final static String PROP_TIMEBETWEENEVICTIONRUNSMILLIS = "timeBetweenEvictionRunsMillis";
+    public final static String PROP_NUMTESTSPEREVICTIONRUN = "numTestsPerEvictionRun";
+    public final static String PROP_MINEVICTABLEIDLETIMEMILLIS = "minEvictableIdleTimeMillis";
+    public final static String PROP_PHY_TIMEOUT_MILLIS = "phyTimeoutMillis";
+    public final static String PROP_TESTWHILEIDLE = "testWhileIdle";
+    public final static String PROP_PASSWORD = "password";
+    public final static String PROP_URL = "url";
+    public final static String PROP_USERNAME = "username";
+    public final static String PROP_VALIDATIONQUERY = "validationQuery";
+    public final static String PROP_VALIDATIONQUERY_TIMEOUT = "validationQueryTimeout";
 
-    private final static String[] ALL_PROPERTIES                           = { PROP_DEFAULTAUTOCOMMIT,
+    public final static String PROP_INITCONNECTIONSQLS = "initConnectionSqls";
+    public final static String PROP_ACCESSTOUNDERLYINGCONNECTIONALLOWED = "accessToUnderlyingConnectionAllowed";
+    public final static String PROP_REMOVEABANDONED = "removeAbandoned";
+    public final static String PROP_REMOVEABANDONEDTIMEOUT = "removeAbandonedTimeout";
+    public final static String PROP_LOGABANDONED = "logAbandoned";
+    public final static String PROP_POOLPREPAREDSTATEMENTS = "poolPreparedStatements";
+    public final static String PROP_MAXOPENPREPAREDSTATEMENTS = "maxOpenPreparedStatements";
+    public final static String PROP_CONNECTIONPROPERTIES = "connectionProperties";
+    public final static String PROP_FILTERS = "filters";
+    public final static String PROP_EXCEPTION_SORTER = "exceptionSorter";
+    public final static String PROP_EXCEPTION_SORTER_CLASS_NAME = "exception-sorter-class-name";
+    public final static String PROP_NAME = "name";
+
+    public final static String PROP_INIT = "init";
+
+    private final static String[] ALL_PROPERTIES = {PROP_DEFAULTAUTOCOMMIT,
             PROP_DEFAULTREADONLY, PROP_DEFAULTTRANSACTIONISOLATION, PROP_DEFAULTCATALOG, PROP_DRIVERCLASSNAME,
             PROP_MAXACTIVE, PROP_MAXIDLE, PROP_MINIDLE, PROP_INITIALSIZE, PROP_MAXWAIT, PROP_TESTONBORROW,
             PROP_TESTONRETURN, PROP_TIMEBETWEENEVICTIONRUNSMILLIS, PROP_NUMTESTSPEREVICTIONRUN,
-            PROP_MINEVICTABLEIDLETIMEMILLIS, PROP_TESTWHILEIDLE, PROP_PASSWORD, PROP_URL, PROP_USERNAME,
+            PROP_MINEVICTABLEIDLETIMEMILLIS, PROP_TESTWHILEIDLE, PROP_PASSWORD, PROP_FILTERS, PROP_URL, PROP_USERNAME,
             PROP_VALIDATIONQUERY, PROP_VALIDATIONQUERY_TIMEOUT, PROP_INITCONNECTIONSQLS,
             PROP_ACCESSTOUNDERLYINGCONNECTIONALLOWED, PROP_REMOVEABANDONED, PROP_REMOVEABANDONEDTIMEOUT,
             PROP_LOGABANDONED, PROP_POOLPREPAREDSTATEMENTS, PROP_MAXOPENPREPAREDSTATEMENTS, PROP_CONNECTIONPROPERTIES,
-            PROP_FILTERS, PROP_EXCEPTION_SORTER, PROP_EXCEPTION_SORTER_CLASS_NAME };
+            PROP_EXCEPTION_SORTER, PROP_EXCEPTION_SORTER_CLASS_NAME, PROP_INIT, PROP_NAME, //
+            "druid.timeBetweenLogStatsMillis", //
+            "druid.stat.sql.MaxSize", //
+            "druid.clearFiltersEnable", //
+            "druid.resetStatEnable", //
+            "druid.notFullTimeoutRetryCount", //
+            "druid.maxWaitThreadCount", //
+            "druid.failFast", //
+            "druid.phyTimeoutMillis", //
+            "druid.wall.tenantColumn", //
+            "druid.wall.updateAllow", //
+            "druid.wall.deleteAllow", //
+            "druid.wall.insertAllow", //
+            "druid.wall.selelctAllow", //
+            "druid.wall.multiStatementAllow", //
+    };
 
     @Override
     public Object getObjectInstance(Object obj, Name name, Context nameCtx, Hashtable<?, ?> environment)
-                                                                                                        throws Exception {
+            throws Exception {
 
         // We only know how to deal with <code>javax.naming.Reference</code>s
         // that specify a class name of "javax.sql.DataSource"
@@ -93,7 +112,10 @@ public class DruidDataSourceFactory implements ObjectFactory {
             return null;
         }
         Reference ref = (Reference) obj;
-        if (!"javax.sql.DataSource".equals(ref.getClassName())) {
+
+        if ((!"javax.sql.DataSource".equals(ref.getClassName())) //
+                && (!"com.alibaba.druid.pool.DruidDataSource".equals(ref.getClassName())) //
+                ) {
             return null;
         }
 
@@ -107,31 +129,42 @@ public class DruidDataSourceFactory implements ObjectFactory {
             }
         }
 
-        return createDataSource(properties);
+        return createDataSourceInternal(properties);
     }
 
-    /**
-     * Creates and configures a {@link BasicDataSource} instance based on the given properties.
-     * 
-     * @param properties the datasource configuration properties
-     * @throws Exception if an error occurs creating the data source
-     */
-    @SuppressWarnings("deprecation")
-    public static DataSource createDataSource(Properties properties) throws Exception {
+    protected DataSource createDataSourceInternal(Properties properties) throws Exception {
         DruidDataSource dataSource = new DruidDataSource();
+        config(dataSource, properties);
+        return dataSource;
+    }
+
+    @SuppressWarnings("rawtypes")
+    public static DataSource createDataSource(Properties properties) throws Exception {
+        return createDataSource((Map) properties);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public static DataSource createDataSource(Map properties) throws Exception {
+        DruidDataSource dataSource = new DruidDataSource();
+        config(dataSource, properties);
+        return dataSource;
+    }
+
+    @SuppressWarnings({"deprecation", "rawtypes"})
+    public static void config(DruidDataSource dataSource, Map<?, ?> properties) throws SQLException {
         String value = null;
 
-        value = properties.getProperty(PROP_DEFAULTAUTOCOMMIT);
+        value = (String) properties.get(PROP_DEFAULTAUTOCOMMIT);
         if (value != null) {
             dataSource.setDefaultAutoCommit(Boolean.valueOf(value).booleanValue());
         }
 
-        value = properties.getProperty(PROP_DEFAULTREADONLY);
+        value = (String) properties.get(PROP_DEFAULTREADONLY);
         if (value != null) {
             dataSource.setDefaultReadOnly(Boolean.valueOf(value).booleanValue());
         }
 
-        value = properties.getProperty(PROP_DEFAULTTRANSACTIONISOLATION);
+        value = (String) properties.get(PROP_DEFAULTTRANSACTIONISOLATION);
         if (value != null) {
             int level = UNKNOWN_TRANSACTIONISOLATION;
             if ("NONE".equalsIgnoreCase(value)) {
@@ -148,184 +181,190 @@ public class DruidDataSourceFactory implements ObjectFactory {
                 try {
                     level = Integer.parseInt(value);
                 } catch (NumberFormatException e) {
-                    System.err.println("Could not parse defaultTransactionIsolation: " + value);
-                    System.err.println("WARNING: defaultTransactionIsolation not set");
-                    System.err.println("using default value of database driver");
+                    LOG.error("Could not parse defaultTransactionIsolation: " + value);
+                    LOG.error("WARNING: defaultTransactionIsolation not set");
+                    LOG.error("using default value of database driver");
                     level = UNKNOWN_TRANSACTIONISOLATION;
                 }
             }
             dataSource.setDefaultTransactionIsolation(level);
         }
 
-        value = properties.getProperty(PROP_DEFAULTCATALOG);
+        value = (String) properties.get(PROP_DEFAULTCATALOG);
         if (value != null) {
             dataSource.setDefaultCatalog(value);
         }
 
-        value = properties.getProperty(PROP_DRIVERCLASSNAME);
+        value = (String) properties.get(PROP_DRIVERCLASSNAME);
         if (value != null) {
             dataSource.setDriverClassName(value);
         }
 
-        value = properties.getProperty(PROP_MAXACTIVE);
+        value = (String) properties.get(PROP_MAXACTIVE);
         if (value != null) {
             dataSource.setMaxActive(Integer.parseInt(value));
         }
 
-        value = properties.getProperty(PROP_MAXIDLE);
+        value = (String) properties.get(PROP_MAXIDLE);
         if (value != null) {
             dataSource.setMaxIdle(Integer.parseInt(value));
         }
 
-        value = properties.getProperty(PROP_MINIDLE);
+        value = (String) properties.get(PROP_MINIDLE);
         if (value != null) {
             dataSource.setMinIdle(Integer.parseInt(value));
         }
 
-        value = properties.getProperty(PROP_INITIALSIZE);
+        value = (String) properties.get(PROP_INITIALSIZE);
         if (value != null) {
             dataSource.setInitialSize(Integer.parseInt(value));
         }
 
-        value = properties.getProperty(PROP_MAXWAIT);
+        value = (String) properties.get(PROP_MAXWAIT);
         if (value != null) {
             dataSource.setMaxWait(Long.parseLong(value));
         }
 
-        value = properties.getProperty(PROP_TESTONBORROW);
+        value = (String) properties.get(PROP_TESTONBORROW);
         if (value != null) {
             dataSource.setTestOnBorrow(Boolean.valueOf(value).booleanValue());
         }
 
-        value = properties.getProperty(PROP_TESTONRETURN);
+        value = (String) properties.get(PROP_TESTONRETURN);
         if (value != null) {
             dataSource.setTestOnReturn(Boolean.valueOf(value).booleanValue());
         }
 
-        value = properties.getProperty(PROP_TIMEBETWEENEVICTIONRUNSMILLIS);
+        value = (String) properties.get(PROP_TIMEBETWEENEVICTIONRUNSMILLIS);
         if (value != null) {
             dataSource.setTimeBetweenEvictionRunsMillis(Long.parseLong(value));
         }
 
-        value = properties.getProperty(PROP_NUMTESTSPEREVICTIONRUN);
+        value = (String) properties.get(PROP_NUMTESTSPEREVICTIONRUN);
         if (value != null) {
             dataSource.setNumTestsPerEvictionRun(Integer.parseInt(value));
         }
 
-        value = properties.getProperty(PROP_MINEVICTABLEIDLETIMEMILLIS);
+        value = (String) properties.get(PROP_MINEVICTABLEIDLETIMEMILLIS);
         if (value != null) {
             dataSource.setMinEvictableIdleTimeMillis(Long.parseLong(value));
         }
 
-        value = properties.getProperty(PROP_TESTWHILEIDLE);
+        value = (String) properties.get(PROP_PHY_TIMEOUT_MILLIS);
+        if (value != null) {
+            dataSource.setPhyTimeoutMillis(Long.parseLong(value));
+        }
+
+        value = (String) properties.get(PROP_TESTWHILEIDLE);
         if (value != null) {
             dataSource.setTestWhileIdle(Boolean.valueOf(value).booleanValue());
         }
 
-        value = properties.getProperty(PROP_PASSWORD);
+        value = (String) properties.get(PROP_PASSWORD);
         if (value != null) {
             dataSource.setPassword(value);
         }
 
-        value = properties.getProperty(PROP_URL);
+        value = (String) properties.get(PROP_URL);
         if (value != null) {
             dataSource.setUrl(value);
         }
 
-        value = properties.getProperty(PROP_USERNAME);
+        value = (String) properties.get(PROP_USERNAME);
         if (value != null) {
             dataSource.setUsername(value);
         }
 
-        value = properties.getProperty(PROP_VALIDATIONQUERY);
+        value = (String) properties.get(PROP_VALIDATIONQUERY);
         if (value != null) {
             dataSource.setValidationQuery(value);
         }
 
-        value = properties.getProperty(PROP_VALIDATIONQUERY_TIMEOUT);
+        value = (String) properties.get(PROP_VALIDATIONQUERY_TIMEOUT);
         if (value != null) {
             dataSource.setValidationQueryTimeout(Integer.parseInt(value));
         }
 
-        value = properties.getProperty(PROP_ACCESSTOUNDERLYINGCONNECTIONALLOWED);
+        value = (String) properties.get(PROP_ACCESSTOUNDERLYINGCONNECTIONALLOWED);
         if (value != null) {
             dataSource.setAccessToUnderlyingConnectionAllowed(Boolean.valueOf(value).booleanValue());
         }
 
-        value = properties.getProperty(PROP_REMOVEABANDONED);
+        value = (String) properties.get(PROP_REMOVEABANDONED);
         if (value != null) {
             dataSource.setRemoveAbandoned(Boolean.valueOf(value).booleanValue());
         }
 
-        value = properties.getProperty(PROP_REMOVEABANDONEDTIMEOUT);
+        value = (String) properties.get(PROP_REMOVEABANDONEDTIMEOUT);
         if (value != null) {
             dataSource.setRemoveAbandonedTimeout(Integer.parseInt(value));
         }
 
-        value = properties.getProperty(PROP_LOGABANDONED);
+        value = (String) properties.get(PROP_LOGABANDONED);
         if (value != null) {
             dataSource.setLogAbandoned(Boolean.valueOf(value).booleanValue());
         }
 
-        value = properties.getProperty(PROP_POOLPREPAREDSTATEMENTS);
+        value = (String) properties.get(PROP_POOLPREPAREDSTATEMENTS);
         if (value != null) {
-            dataSource.setPoolPreparedStatements(Boolean.valueOf(value).booleanValue());
+            boolean poolPreparedStatements = Boolean.valueOf(value).booleanValue();
+            dataSource.setPoolPreparedStatements(poolPreparedStatements);
+
+            if (poolPreparedStatements) {
+                value = (String) properties.get(PROP_MAXOPENPREPAREDSTATEMENTS);
+                if (value != null) {
+                    dataSource.setMaxOpenPreparedStatements(Integer.parseInt(value));
+                }
+            }
         }
 
-        value = properties.getProperty(PROP_MAXOPENPREPAREDSTATEMENTS);
-        if (value != null) {
-            dataSource.setMaxOpenPreparedStatements(Integer.parseInt(value));
-        }
-
-        value = properties.getProperty(PROP_FILTERS);
+        value = (String) properties.get(PROP_FILTERS);
         if (value != null) {
             dataSource.setFilters(value);
         }
 
-        value = properties.getProperty(PROP_EXCEPTION_SORTER);
+        value = (String) properties.get(PROP_EXCEPTION_SORTER);
         if (value != null) {
             dataSource.setExceptionSorter(value);
         }
 
-        value = properties.getProperty(PROP_EXCEPTION_SORTER_CLASS_NAME);
+        value = (String) properties.get(PROP_EXCEPTION_SORTER_CLASS_NAME);
         if (value != null) {
             dataSource.setExceptionSorter(value);
         }
 
-        value = properties.getProperty(PROP_INITCONNECTIONSQLS);
+        value = (String) properties.get(PROP_INITCONNECTIONSQLS);
         if (value != null) {
             StringTokenizer tokenizer = new StringTokenizer(value, ";");
             dataSource.setConnectionInitSqls(Collections.list(tokenizer));
         }
 
-        value = properties.getProperty(PROP_CONNECTIONPROPERTIES);
+        value = (String) properties.get(PROP_CONNECTIONPROPERTIES);
         if (value != null) {
-            Properties p = getProperties(value);
-            Enumeration<?> e = p.propertyNames();
-            while (e.hasMoreElements()) {
-                String propertyName = (String) e.nextElement();
-                dataSource.addConnectionProperty(propertyName, p.getProperty(propertyName));
+            dataSource.setConnectionProperties(value);
+        }
+
+        {
+            Properties dataSourceProperties = null;
+            for (Map.Entry entry : properties.entrySet()) {
+                String entryKey = (String) entry.getKey();
+                if (entryKey.startsWith("druid.")) {
+                    if (dataSourceProperties == null) {
+                        dataSourceProperties = new Properties();
+                    }
+
+                    String entryValue = (String) entry.getValue();
+                    dataSourceProperties.put(entryKey, entryValue);
+                }
+            }
+            if (dataSourceProperties != null) {
+                dataSource.configFromPropety(dataSourceProperties);
             }
         }
 
-        // Return the configured DataSource instance
-        return dataSource;
-    }
-
-    /**
-     * <p>
-     * Parse properties from the string. Format of the string must be [propertyName=property;]*
-     * <p>
-     * 
-     * @param propText
-     * @return Properties
-     * @throws Exception
-     */
-    static private Properties getProperties(String propText) throws Exception {
-        Properties p = new Properties();
-        if (propText != null) {
-            p.load(new ByteArrayInputStream(propText.replace(';', '\n').getBytes()));
+        value = (String) properties.get(PROP_INIT);
+        if ("true".equals(value)) {
+            dataSource.init();
         }
-        return p;
     }
 }

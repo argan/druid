@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import com.alibaba.druid.filter.FilterChain;
 import com.alibaba.druid.filter.FilterChainImpl;
 
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public class ClobProxyImpl implements ClobProxy {
 
@@ -36,6 +36,10 @@ public class ClobProxyImpl implements ClobProxy {
     protected final DataSourceProxy dataSource;
 
     public ClobProxyImpl(DataSourceProxy dataSource, ConnectionProxy connection, Clob clob){
+        if (clob == null) {
+            throw new IllegalArgumentException("clob is null");
+        }
+        
         this.dataSource = dataSource;
         this.connection = connection;
         this.clob = clob;

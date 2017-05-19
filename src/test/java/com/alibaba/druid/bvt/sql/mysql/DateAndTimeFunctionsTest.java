@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@ package com.alibaba.druid.bvt.sql.mysql;
 
 import java.util.List;
 
+import org.junit.Assert;
+import junit.framework.TestCase;
+
 import com.alibaba.druid.sql.ast.SQLStatement;
 import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlOutputVisitor;
 import com.alibaba.druid.sql.parser.SQLStatementParser;
-
-import junit.framework.Assert;
-import junit.framework.TestCase;
 
 public class DateAndTimeFunctionsTest extends TestCase {
 
@@ -620,6 +620,29 @@ public class DateAndTimeFunctionsTest extends TestCase {
         String text = output(stmtList);
 
         Assert.assertEquals("SELECT YEARWEEK('1987-01-01');", text);
+    }
+    
+    
+    public void test_54() throws Exception {
+        String sql = "SELECT t.c1, DATE_ADD('2008-01-02', INTERVAL +t.c1 DAY) from t";
+
+        SQLStatementParser parser = new MySqlStatementParser(sql);
+        List<SQLStatement> stmtList = parser.parseStatementList();
+
+        String text = output(stmtList);
+
+        Assert.assertEquals("SELECT t.c1, DATE_ADD('2008-01-02', INTERVAL +t.c1 DAY)\nFROM t;", text);
+    }
+    
+    public void test_55() throws Exception {
+        String sql = "SELECT t.c1, DATE_ADD('2008-01-02', INTERVAL -t.c1 DAY) from t";
+
+        SQLStatementParser parser = new MySqlStatementParser(sql);
+        List<SQLStatement> stmtList = parser.parseStatementList();
+
+        String text = output(stmtList);
+
+        Assert.assertEquals("SELECT t.c1, DATE_ADD('2008-01-02', INTERVAL -t.c1 DAY)\nFROM t;", text);
     }
 
     private String output(List<SQLStatement> stmtList) {

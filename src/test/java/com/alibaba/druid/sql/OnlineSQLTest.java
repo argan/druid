@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.sql;
 
 import java.sql.Connection;
@@ -8,18 +23,18 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
-import junit.framework.Assert;
+import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlOutputVisitor;
+import org.junit.Assert;
 import junit.framework.TestCase;
 
 import com.alibaba.druid.sql.ast.SQLStatement;
 import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
-import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlParameterizedOutputVisitor;
 import com.alibaba.druid.sql.dialect.oracle.parser.OracleStatementParser;
 import com.alibaba.druid.sql.dialect.oracle.visitor.OracleParameterizedOutputVisitor;
 
 public class OnlineSQLTest extends TestCase {
 
-    private String url      = "jdbc:mysql://10.20.129.146/dragoon_v25monitordb_online";
+    private String url      = "jdbc:mysql://a.b.c.d/dragoon_v25monitordb_online";
     private String user     = "dragoon";
     private String password = "dragoon";
 
@@ -126,7 +141,7 @@ public class OnlineSQLTest extends TestCase {
         Assert.assertEquals(1, statementList.size());
 
         StringBuilder out = new StringBuilder();
-        MySqlParameterizedOutputVisitor visitor = new MySqlParameterizedOutputVisitor(out);
+        MySqlOutputVisitor visitor = new MySqlOutputVisitor(out, true);
         statemen.accept(visitor);
 
         update(id, out.toString(), 1);

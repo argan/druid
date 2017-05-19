@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,7 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLSubqueryTableSource extends SQLTableSourceImpl {
 
-    private static final long serialVersionUID = 1L;
-
-    protected SQLSelect       select;
+    protected SQLSelect select;
 
     public SQLSubqueryTableSource(){
 
@@ -33,12 +31,11 @@ public class SQLSubqueryTableSource extends SQLTableSourceImpl {
 
     public SQLSubqueryTableSource(SQLSelect select, String alias){
         super(alias);
-        this.select = select;
+        this.setSelect(select);
     }
 
     public SQLSubqueryTableSource(SQLSelect select){
-
-        this.select = select;
+        this.setSelect(select);
     }
 
     public SQLSelect getSelect() {
@@ -46,6 +43,9 @@ public class SQLSubqueryTableSource extends SQLTableSourceImpl {
     }
 
     public void setSelect(SQLSelect select) {
+        if (select != null) {
+            select.setParent(this);
+        }
         this.select = select;
     }
 

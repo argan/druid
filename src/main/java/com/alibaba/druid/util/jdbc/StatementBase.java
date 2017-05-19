@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.util.jdbc;
 
 import java.sql.Connection;
@@ -7,28 +22,29 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLWarning;
 import java.sql.Statement;
 
+import com.alibaba.druid.mock.MockConnection;
 import com.alibaba.druid.mock.MockConnectionClosedException;
 
 public abstract class StatementBase implements Statement {
 
-    private Connection connection;
-    private int        fetchDirection;
-    private int        fetchSize;
-    private int        resultSetType;
-    private int        resultSetConcurrency;
-    private int        resultSetHoldability;
-    private int        maxFieldSize;
-    private int        maxRows;
-    private int        queryTimeout;
-    private boolean    escapeProcessing;
-    private String     cursorName;
-    private SQLWarning warnings;
-    private int        updateCount;
-    protected boolean  closed = false;
-    private boolean    poolable;
+    private Connection  connection;
+    private int         fetchDirection;
+    private int         fetchSize;
+    private int         resultSetType;
+    private int         resultSetConcurrency;
+    private int         resultSetHoldability;
+    private int         maxFieldSize;
+    private int         maxRows;
+    private int         queryTimeout;
+    private boolean     escapeProcessing;
+    private String      cursorName;
+    private SQLWarning  warnings;
+    private int         updateCount;
+    protected boolean   closed = false;
+    private boolean     poolable;
 
-    private ResultSet  generatedKeys;
-    private ResultSet  resultSet;
+    protected ResultSet generatedKeys;
+    protected ResultSet resultSet;
 
     public StatementBase(Connection connection){
         super();
@@ -43,13 +59,17 @@ public abstract class StatementBase implements Statement {
         this.connection = connection;
     }
 
-    protected void checkOpen() throws SQLException, MockConnectionClosedException {
+    protected void checkOpen() throws SQLException {
         if (closed) {
             throw new SQLException();
         }
-        
-        if (this.connection != null && this.connection.isClosed()) {
-            throw new MockConnectionClosedException();
+
+        if (this.connection != null) {
+            if (this.connection instanceof MockConnection) {
+                ((MockConnection) this.connection).checkState();
+            } else if (this.connection.isClosed()) {
+                throw new MockConnectionClosedException();
+            }
         }
     }
 

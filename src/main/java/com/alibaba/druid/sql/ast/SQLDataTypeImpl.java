@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,15 @@
  */
 package com.alibaba.druid.sql.ast;
 
+import com.alibaba.druid.sql.visitor.SQLASTVisitor;
+
 import java.util.ArrayList;
 import java.util.List;
 
-import com.alibaba.druid.sql.dialect.oracle.visitor.OracleASTVisitor;
-import com.alibaba.druid.sql.visitor.SQLASTVisitor;
-
 public class SQLDataTypeImpl extends SQLObjectImpl implements SQLDataType {
 
-    private static final long     serialVersionUID = -2783296007802532452L;
-
     protected String              name;
-    protected final List<SQLExpr> arguments        = new ArrayList<SQLExpr>();
+    protected final List<SQLExpr> arguments = new ArrayList<SQLExpr>();
 
     public SQLDataTypeImpl(){
 
@@ -46,14 +43,6 @@ public class SQLDataTypeImpl extends SQLObjectImpl implements SQLDataType {
         visitor.endVisit(this);
     }
 
-    protected void accept0(OracleASTVisitor visitor) {
-        if (visitor.visit(this)) {
-            acceptChild(visitor, this.arguments);
-        }
-
-        visitor.endVisit(this);
-    }
-
     public String getName() {
         return this.name;
     }
@@ -65,19 +54,34 @@ public class SQLDataTypeImpl extends SQLObjectImpl implements SQLDataType {
     public List<SQLExpr> getArguments() {
         return this.arguments;
     }
-
-    public void output(StringBuffer buf) {
-        buf.append(this.name);
-        if (this.arguments.size() > 0) {
-            buf.append("(");
-            int i = 0;
-            for (int size = this.arguments.size(); i < size; ++i) {
-                if (i != 0) {
-                    buf.append(", ");
-                }
-                ((SQLExpr) this.arguments.get(i)).output(buf);
-            }
-            buf.append(")");
+    
+    public void addArgument(SQLExpr argument) {
+        if (argument != null) {
+            argument.setParent(this);
         }
+        this.arguments.add(argument);
     }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + arguments.hashCode();
+        result = prime * result + ((name == null) ? 0 : name.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null) return false;
+        if (getClass() != obj.getClass()) return false;
+        SQLDataTypeImpl other = (SQLDataTypeImpl) obj;
+        if (!arguments.equals(other.arguments)) return false;
+        if (name == null) {
+            if (other.name != null) return false;
+        } else if (!name.equals(other.name)) return false;
+        return true;
+    }
+
 }

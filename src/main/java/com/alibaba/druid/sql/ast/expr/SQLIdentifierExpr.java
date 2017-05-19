@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,20 +21,19 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLIdentifierExpr extends SQLExprImpl implements SQLName {
 
-    private static final long serialVersionUID = -4101240977289682659L;
+    private String           name;
 
-    private String            name;
+    private transient String lowerName;
 
     public SQLIdentifierExpr(){
 
     }
 
     public SQLIdentifierExpr(String name){
-
         this.name = name;
     }
-    
-    public String getSimleName() {
+
+    public String getSimpleName() {
         return name;
     }
 
@@ -44,6 +43,18 @@ public class SQLIdentifierExpr extends SQLExprImpl implements SQLName {
 
     public void setName(String name) {
         this.name = name;
+        this.lowerName = null;
+    }
+
+    public String getLowerName() {
+        if (lowerName == null && name != null) {
+            lowerName = name.toLowerCase();
+        }
+        return lowerName;
+    }
+
+    public void setLowerName(String lowerName) {
+        this.lowerName = lowerName;
     }
 
     public void output(StringBuffer buf) {
@@ -86,4 +97,7 @@ public class SQLIdentifierExpr extends SQLExprImpl implements SQLName {
         return true;
     }
 
+    public String toString() {
+        return this.name;
+    }
 }

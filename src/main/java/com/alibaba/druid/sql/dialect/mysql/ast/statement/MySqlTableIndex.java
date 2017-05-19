@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,11 @@ import java.util.List;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.SQLName;
-import com.alibaba.druid.sql.ast.SQLObjectImpl;
 import com.alibaba.druid.sql.ast.statement.SQLTableElement;
+import com.alibaba.druid.sql.dialect.mysql.ast.MySqlObjectImpl;
 import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlASTVisitor;
-import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
-@SuppressWarnings("serial")
-public class MySqlTableIndex extends SQLObjectImpl implements SQLTableElement {
+public class MySqlTableIndex extends MySqlObjectImpl implements SQLTableElement {
 
     private SQLName       name;
     private String        indexType;
@@ -55,22 +53,15 @@ public class MySqlTableIndex extends SQLObjectImpl implements SQLTableElement {
     public List<SQLExpr> getColumns() {
         return columns;
     }
-
-    @Override
-    protected void accept0(SQLASTVisitor visitor) {
-        if (visitor instanceof MySqlASTVisitor) {
-            accept0((MySqlASTVisitor) visitor);
-            return;
+    
+    public void addColumn(SQLExpr column) {
+        if (column != null) {
+            column.setParent(this);
         }
-
-        if (visitor.visit(this)) {
-            acceptChild(visitor, name);
-            acceptChild(visitor, columns);
-        }
-        visitor.endVisit(this);
+        this.columns.add(column);
     }
 
-    protected void accept0(MySqlASTVisitor visitor) {
+    public void accept0(MySqlASTVisitor visitor) {
         if (visitor.visit(this)) {
             acceptChild(visitor, name);
             acceptChild(visitor, columns);

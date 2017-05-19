@@ -1,52 +1,87 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.sql.dialect.oracle.ast.stmt;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.SQLName;
-import com.alibaba.druid.sql.ast.SQLPartitioningClause;
+import com.alibaba.druid.sql.ast.SQLPartitionBy;
 import com.alibaba.druid.sql.ast.statement.SQLCreateTableStatement;
-import com.alibaba.druid.sql.ast.statement.SQLSelect;
+import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleLobStorageClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleStorageClause;
 import com.alibaba.druid.sql.dialect.oracle.visitor.OracleASTVisitor;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
+import com.alibaba.druid.util.JdbcConstants;
 
 public class OracleCreateTableStatement extends SQLCreateTableStatement implements OracleDDLStatement {
 
-    private static final long        serialVersionUID  = 1L;
+    private SQLName                 tablespace;
 
-    private SQLName                  tablespace;
+    private boolean                 inMemoryMetadata;
 
-    private SQLSelect                select;
-
-    private boolean                  inMemoryMetadata;
-
-    private boolean                  cursorSpecificSegment;
+    private boolean                 cursorSpecificSegment;
 
     // NOPARALLEL
-    private Boolean                  parallel;
+    private Boolean                 parallel;
 
-    private OracleStorageClause      storage;
+    private OracleStorageClause     storage;
+    private OracleLobStorageClause  lobStorage;
 
-    private boolean                  organizationIndex = false;
+    private boolean                 organizationIndex = false;
 
-    private SQLExpr                  ptcfree;
-    private SQLExpr                  pctused;
-    private SQLExpr                  initrans;
-    private SQLExpr                  maxtrans;
+    private SQLExpr                 ptcfree;
+    private SQLExpr                 pctused;
+    private SQLExpr                 initrans;
+    private SQLExpr                 maxtrans;
 
-    private Boolean                  logging;
-    private Boolean                  compress;
-    private boolean                  onCommit;
-    private boolean                  preserveRows;
+    private Boolean                 logging;
+    private Boolean                 compress;
+    private boolean                 onCommit;
+    private boolean                 preserveRows;
 
-    private Boolean                  cache;
+    private Boolean                 cache;
 
-    private SQLPartitioningClause partitioning;
+    private SQLPartitionBy   partitioning;
 
-    public SQLPartitioningClause getPartitioning() {
+    private DeferredSegmentCreation deferredSegmentCreation;
+    
+    public OracleCreateTableStatement() {
+        super (JdbcConstants.ORACLE);
+    }
+
+    public OracleLobStorageClause getLobStorage() {
+        return lobStorage;
+    }
+
+    public void setLobStorage(OracleLobStorageClause lobStorage) {
+        this.lobStorage = lobStorage;
+    }
+
+    public DeferredSegmentCreation getDeferredSegmentCreation() {
+        return deferredSegmentCreation;
+    }
+
+    public void setDeferredSegmentCreation(DeferredSegmentCreation deferredSegmentCreation) {
+        this.deferredSegmentCreation = deferredSegmentCreation;
+    }
+
+    public SQLPartitionBy getPartitioning() {
         return partitioning;
     }
 
-    public void setPartitioning(SQLPartitioningClause partitioning) {
+    public void setPartitioning(SQLPartitionBy partitioning) {
         this.partitioning = partitioning;
     }
 
@@ -162,14 +197,6 @@ public class OracleCreateTableStatement extends SQLCreateTableStatement implemen
         this.tablespace = tablespace;
     }
 
-    public SQLSelect getSelect() {
-        return select;
-    }
-
-    public void setSelect(SQLSelect select) {
-        this.select = select;
-    }
-
     protected void accept0(SQLASTVisitor visitor) {
         accept0((OracleASTVisitor) visitor);
     }
@@ -194,4 +221,7 @@ public class OracleCreateTableStatement extends SQLCreateTableStatement implemen
         visitor.endVisit(this);
     }
 
+    public static enum DeferredSegmentCreation {
+        IMMEDIATE, DEFERRED
+    }
 }

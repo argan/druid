@@ -1,6 +1,22 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.sql.dialect.oracle.parser;
 
 import static com.alibaba.druid.sql.parser.CharTypes.isIdentifierChar;
+import static com.alibaba.druid.sql.parser.LayoutCharacters.EOI;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -8,10 +24,8 @@ import java.util.Map;
 import com.alibaba.druid.sql.parser.Keywords;
 import com.alibaba.druid.sql.parser.Lexer;
 import com.alibaba.druid.sql.parser.NotAllowCommentException;
-import com.alibaba.druid.sql.parser.SQLParseException;
+import com.alibaba.druid.sql.parser.ParserException;
 import com.alibaba.druid.sql.parser.Token;
-
-import static com.alibaba.druid.sql.parser.LayoutCharacters.EOI;
 
 public class OracleLexer extends Lexer {
 
@@ -19,116 +33,85 @@ public class OracleLexer extends Lexer {
 
     static {
         Map<String, Token> map = new HashMap<String, Token>();
-        map.put("EXISTS", Token.EXISTS);
-        map.put("THEN", Token.THEN);
-        map.put("AS", Token.AS);
-        map.put("GROUP", Token.GROUP);
-        map.put("BY", Token.BY);
-        map.put("HAVING", Token.HAVING);
-        map.put("DELETE", Token.DELETE);
-        map.put("ORDER", Token.ORDER);
-        map.put("INDEX", Token.INDEX);
-        map.put("FOR", Token.FOR);
-        map.put("SCHEMA", Token.SCHEMA);
-        map.put("FOREIGN", Token.FOREIGN);
-        map.put("REFERENCES", Token.REFERENCES);
-        map.put("CHECK", Token.CHECK);
-        map.put("PRIMARY", Token.PRIMARY);
-        map.put("KEY", Token.KEY);
-        map.put("CONSTRAINT", Token.CONSTRAINT);
-        map.put("DEFAULT", Token.DEFAULT);
-        map.put("VIEW", Token.VIEW);
-        map.put("CREATE", Token.CREATE);
-        map.put("VALUES", Token.VALUES);
-        map.put("ALTER", Token.ALTER);
-        map.put("TABLE", Token.TABLE);
-        map.put("DROP", Token.DROP);
-        map.put("SET", Token.SET);
-        map.put("INTO", Token.INTO);
-        map.put("UPDATE", Token.UPDATE);
-        map.put("NULL", Token.NULL);
-        map.put("IS", Token.IS);
-        map.put("NOT", Token.NOT);
-        map.put("SELECT", Token.SELECT);
-        map.put("INSERT", Token.INSERT);
-        map.put("FROM", Token.FROM);
-        map.put("WHERE", Token.WHERE);
-        map.put("AND", Token.AND);
-        map.put("OR", Token.OR);
-        map.put("XOR", Token.XOR);
-        map.put("DISTINCT", Token.DISTINCT);
-        map.put("UNIQUE", Token.UNIQUE);
-        map.put("ALL", Token.ALL);
-        map.put("UNION", Token.UNION);
-        map.put("INTERSECT", Token.INTERSECT);
-        map.put("MINUS", Token.MINUS);
-        map.put("INNER", Token.INNER);
-        map.put("LEFT", Token.LEFT);
-        map.put("RIGHT", Token.RIGHT);
-        map.put("FULL", Token.FULL);
-        map.put("ON", Token.ON);
-        map.put("OUTER", Token.OUTER);
-        map.put("JOIN", Token.JOIN);
-        map.put("NEW", Token.NEW);
-        map.put("CASE", Token.CASE);
-        map.put("WHEN", Token.WHEN);
-        map.put("END", Token.END);
-        map.put("WHEN", Token.WHEN);
-        map.put("ELSE", Token.ELSE);
-        map.put("EXISTS", Token.EXISTS);
-        map.put("CAST", Token.CAST);
-        map.put("IN", Token.IN);
-        map.put("ASC", Token.ASC);
-        map.put("DESC", Token.DESC);
-        map.put("LIKE", Token.LIKE);
-        map.put("ESCAPE", Token.ESCAPE);
-        map.put("BETWEEN", Token.BETWEEN);
-        map.put("INTERVAL", Token.INTERVAL);
-        map.put("LOCK", Token.LOCK);
-        map.put("SOME", Token.SOME);
-        map.put("ANY", Token.ANY);
-        map.put("TRUNCATE", Token.TRUNCATE);
 
-        map.put("START", Token.START);
-        map.put("CONNECT", Token.CONNECT);
-        map.put("PRIOR", Token.PRIOR);
-        map.put("WITH", Token.WITH);
-        map.put("EXTRACT", Token.EXTRACT);
-        map.put("COLUMN", Token.COLUMN);
+        map.putAll(Keywords.DEFAULT_KEYWORDS.getKeywords());
 
-        map.put("CURSOR", Token.CURSOR);
-        
-        map.put("MODEL", Token.MODEL);
-        map.put("MERGE", Token.MERGE);
-        map.put("USING", Token.USING);
-        map.put("MATCHED", Token.MATCHED);
-        map.put("ERRORS", Token.ERRORS);
-        map.put("REJECT", Token.REJECT);
-        map.put("UNLIMITED", Token.UNLIMITED);
-        map.put("RETURNING", Token.RETURNING);
-        map.put("LIMIT", Token.LIMIT);
-        map.put("OF", Token.OF);
         map.put("BEGIN", Token.BEGIN);
-        map.put("SHARE", Token.SHARE);
-        map.put("EXCLUSIVE", Token.EXCLUSIVE);
-        map.put("MODE", Token.MODE);
-        map.put("WAIT", Token.WAIT);
-        map.put("NOWAIT", Token.NOWAIT);
-        map.put("SESSION", Token.SESSION);
-        map.put("PROCEDURE", Token.PROCEDURE);
-        map.put("LOCAL", Token.LOCAL);
-        map.put("SYSDATE", Token.SYSDATE);
-        map.put("DECLARE", Token.DECLARE);
-        map.put("EXCEPTION", Token.EXCEPTION);
-        map.put("GRANT", Token.GRANT);
         map.put("COMMENT", Token.COMMENT);
-        map.put("LOOP", Token.LOOP);
-        map.put("IF", Token.IF);
-        map.put("ELSE", Token.ELSE);
-        map.put("GOTO", Token.GOTO);
         map.put("COMMIT", Token.COMMIT);
-        map.put("SAVEPOINT", Token.SAVEPOINT);
+        map.put("CONNECT", Token.CONNECT);
+        map.put("CONTINUE", Token.CONTINUE);
+
         map.put("CROSS", Token.CROSS);
+        map.put("CURSOR", Token.CURSOR);
+        map.put("DECLARE", Token.DECLARE);
+        map.put("ERRORS", Token.ERRORS);
+        map.put("EXCEPTION", Token.EXCEPTION);
+
+        map.put("EXCLUSIVE", Token.EXCLUSIVE);
+        map.put("EXTRACT", Token.EXTRACT);
+        map.put("GOTO", Token.GOTO);
+        map.put("IF", Token.IF);
+        map.put("ELSIF", Token.ELSIF);
+
+        map.put("LIMIT", Token.LIMIT);
+        map.put("LOOP", Token.LOOP);
+        map.put("MATCHED", Token.MATCHED);
+        map.put("MERGE", Token.MERGE);
+
+        map.put("MODE", Token.MODE);
+        map.put("MODEL", Token.MODEL);
+        map.put("NOWAIT", Token.NOWAIT);
+        map.put("OF", Token.OF);
+        map.put("PRIOR", Token.PRIOR);
+
+        map.put("REJECT", Token.REJECT);
+        map.put("RETURNING", Token.RETURNING);
+        map.put("SAVEPOINT", Token.SAVEPOINT);
+        map.put("SESSION", Token.SESSION);
+
+        map.put("SHARE", Token.SHARE);
+        map.put("START", Token.START);
+        map.put("SYSDATE", Token.SYSDATE);
+        map.put("UNLIMITED", Token.UNLIMITED);
+        map.put("USING", Token.USING);
+
+        map.put("WAIT", Token.WAIT);
+        map.put("WITH", Token.WITH);
+
+        map.put("IDENTIFIED", Token.IDENTIFIED);
+
+        map.put("PCTFREE", Token.PCTFREE);
+        map.put("INITRANS", Token.INITRANS);
+        map.put("MAXTRANS", Token.MAXTRANS);
+        map.put("SEGMENT", Token.SEGMENT);
+        map.put("CREATION", Token.CREATION);
+        map.put("IMMEDIATE", Token.IMMEDIATE);
+        map.put("DEFERRED", Token.DEFERRED);
+        map.put("STORAGE", Token.STORAGE);
+        map.put("NEXT", Token.NEXT);
+        map.put("MINEXTENTS", Token.MINEXTENTS);
+        map.put("MAXEXTENTS", Token.MAXEXTENTS);
+        map.put("MAXSIZE", Token.MAXSIZE);
+        map.put("PCTINCREASE", Token.PCTINCREASE);
+        map.put("FLASH_CACHE", Token.FLASH_CACHE);
+        map.put("CELL_FLASH_CACHE", Token.CELL_FLASH_CACHE);
+        map.put("KEEP", Token.KEEP);
+        map.put("NONE", Token.NONE);
+        map.put("LOB", Token.LOB);
+        map.put("STORE", Token.STORE);
+        map.put("ROW", Token.ROW);
+        map.put("CHUNK", Token.CHUNK);
+        map.put("CACHE", Token.CACHE);
+        map.put("NOCACHE", Token.NOCACHE);
+        map.put("LOGGING", Token.LOGGING);
+        map.put("NOCOMPRESS", Token.NOCOMPRESS);
+        map.put("KEEP_DUPLICATES", Token.KEEP_DUPLICATES);
+        map.put("EXCEPTIONS", Token.EXCEPTIONS);
+        map.put("PURGE", Token.PURGE);
+        map.put("INITIALLY", Token.INITIALLY);
+
+        map.put("FETCH", Token.FETCH);
 
         DEFAULT_ORACLE_KEYWORDS = new Keywords(map);
     }
@@ -150,47 +133,54 @@ public class OracleLexer extends Lexer {
             return;
         }
 
-        if (ch != ':' && ch != '#') {
-            throw new SQLParseException("illegal variable");
+        if (ch != ':' && ch != '#' && ch != '$') {
+            throw new ParserException("illegal variable");
         }
 
-        int hash = ch;
-
-        np = bp;
-        sp = 1;
+        mark = pos;
+        bufPos = 1;
         char ch;
 
         boolean quoteFlag = false;
-        if (buf[bp + 1] == '"') {
-            hash = 31 * hash + '"';
-            bp++;
-            sp++;
+        boolean mybatisFlag = false;
+        if (charAt(pos + 1) == '"') {
+            pos++;
+            bufPos++;
             quoteFlag = true;
+        } else if (charAt(pos + 1) == '{') {
+            pos++;
+            bufPos++;
+            mybatisFlag = true;
         }
+
         for (;;) {
-            ch = buf[++bp];
+            ch = charAt(++pos);
 
             if (!isIdentifierChar(ch)) {
                 break;
             }
 
-            hash = 31 * hash + ch;
-
-            sp++;
+            bufPos++;
             continue;
         }
+
         if (quoteFlag) {
             if (ch != '"') {
-                throw new SQLParseException("syntax error");
+                throw new ParserException("syntax error");
             }
-            hash = 31 * hash + '"';
-            ++bp;
-            sp++;
+            ++pos;
+            bufPos++;
+        } else if (mybatisFlag) {
+            if (ch != '}') {
+                throw new ParserException("syntax error");
+            }
+            ++pos;
+            bufPos++;
         }
 
-        this.ch = buf[bp];
+        this.ch = charAt(pos);
 
-        stringVal = symbolTable.addSymbol(buf, np, sp, hash);
+        stringVal = addSymbol();
         Token tok = keywods.getKeyword(stringVal);
         if (tok != null) {
             token = tok;
@@ -204,71 +194,75 @@ public class OracleLexer extends Lexer {
             throw new IllegalStateException();
         }
 
-        np = bp;
-        sp = 0;
+        mark = pos;
+        bufPos = 0;
         scanChar();
 
         // /*+ */
         if (ch == '*') {
             scanChar();
-            sp++;
+            bufPos++;
 
             while (ch == ' ') {
                 scanChar();
-                sp++;
+                bufPos++;
             }
 
             boolean isHint = false;
-            int startHintSp = sp + 1;
+            int startHintSp = bufPos + 1;
             if (ch == '+') {
                 isHint = true;
                 scanChar();
-                sp++;
+                bufPos++;
             }
 
             for (;;) {
-                if (ch == '*' && buf[bp + 1] == '/') {
-                    sp += 2;
+                if (ch == '*' && charAt(pos + 1) == '/') {
+                    bufPos += 2;
                     scanChar();
                     scanChar();
                     break;
                 }
 
                 scanChar();
-                sp++;
+                bufPos++;
             }
 
             if (isHint) {
-                stringVal = new String(buf, np + startHintSp, (sp - startHintSp) - 1);
+                stringVal = subString(mark + startHintSp, (bufPos - startHintSp) - 1);
                 token = Token.HINT;
             } else {
-                stringVal = new String(buf, np, sp);
+                stringVal = subString(mark, bufPos);
                 token = Token.MULTI_LINE_COMMENT;
+                commentCount++;
+                if (keepComments) {
+                    addComment(stringVal);
+                }
             }
-            
+
             if (token != Token.HINT && !isAllowComment()) {
                 throw new NotAllowCommentException();
             }
 
             return;
         }
-        
+
         if (!isAllowComment()) {
             throw new NotAllowCommentException();
         }
 
         if (ch == '/' || ch == '-') {
             scanChar();
-            sp++;
+            bufPos++;
 
             for (;;) {
                 if (ch == '\r') {
-                    if (buf[bp + 1] == '\n') {
-                        sp += 2;
+                    if (charAt(pos + 1) == '\n') {
+                        bufPos += 2;
                         scanChar();
                         break;
                     }
-                    sp++;
+                    bufPos++;
                     break;
                 } else if (ch == EOI) {
                     break;
@@ -276,74 +270,79 @@ public class OracleLexer extends Lexer {
 
                 if (ch == '\n') {
                     scanChar();
-                    sp++;
+                    bufPos++;
                     break;
                 }
 
                 scanChar();
-                sp++;
+                bufPos++;
             }
 
-            stringVal = new String(buf, np + 1, sp);
+            stringVal = subString(mark + 1, bufPos);
             token = Token.LINE_COMMENT;
+            commentCount++;
+            if (keepComments) {
+                addComment(stringVal);
+            }
+            endOfComment = isEOF();
             return;
         }
     }
 
     public void scanNumber() {
-        np = bp;
+        mark = pos;
 
         if (ch == '-') {
-            sp++;
-            ch = buf[++bp];
+            bufPos++;
+            ch = charAt(++pos);
         }
 
         for (;;) {
             if (ch >= '0' && ch <= '9') {
-                sp++;
+                bufPos++;
             } else {
                 break;
             }
-            ch = buf[++bp];
+            ch = charAt(++pos);
         }
 
         boolean isDouble = false;
 
         if (ch == '.') {
-            if (buf[bp + 1] == '.') {
+            if (charAt(pos + 1) == '.') {
                 token = Token.LITERAL_INT;
                 return;
             }
-            sp++;
-            ch = buf[++bp];
+            bufPos++;
+            ch = charAt(++pos);
             isDouble = true;
 
             for (;;) {
                 if (ch >= '0' && ch <= '9') {
-                    sp++;
+                    bufPos++;
                 } else {
                     break;
                 }
-                ch = buf[++bp];
+                ch = charAt(++pos);
             }
         }
 
         if (ch == 'e' || ch == 'E') {
-            sp++;
-            ch = buf[++bp];
+            bufPos++;
+            ch = charAt(++pos);
 
             if (ch == '+' || ch == '-') {
-                sp++;
-                ch = buf[++bp];
+                bufPos++;
+                ch = charAt(++pos);
             }
 
             for (;;) {
                 if (ch >= '0' && ch <= '9') {
-                    sp++;
+                    bufPos++;
                 } else {
                     break;
                 }
-                ch = buf[++bp];
+                ch = charAt(++pos);
             }
 
             isDouble = true;
@@ -367,5 +366,5 @@ public class OracleLexer extends Lexer {
             token = Token.LITERAL_INT;
         }
     }
-    
+
 }

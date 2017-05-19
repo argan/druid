@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 package com.alibaba.druid.sql.dialect.mysql.visitor;
 
-import com.alibaba.druid.sql.dialect.mysql.ast.expr.MySqlBooleanExpr;
 
 public class MySql2OracleOutputVisitor extends MySqlOutputVisitor {
 
@@ -23,11 +22,5 @@ public class MySql2OracleOutputVisitor extends MySqlOutputVisitor {
         super(appender);
     }
 
-    public boolean visit(MySqlBooleanExpr x) {
-        return true;
-    }
-
-    public void endVisit(MySqlBooleanExpr x) {
-    }
 
 }

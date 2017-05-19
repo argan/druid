@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,27 +15,28 @@
  */
 package com.alibaba.druid.pool;
 
-import java.sql.PreparedStatement;
-
 import com.alibaba.druid.pool.DruidPooledPreparedStatement.PreparedStatementKey;
 
+import java.sql.PreparedStatement;
+
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public final class PreparedStatementHolder {
 
-    private final PreparedStatementKey key;
-    private final PreparedStatement    statement;
-    private int                        hitCount                 = 0;
+    public final PreparedStatementKey key;
+    public final PreparedStatement    statement;
+    private int                       hitCount                 = 0;
 
-    private int                        fetchRowPeak             = -1;
+    private int                       fetchRowPeak             = -1;
 
-    private int                        defaultRowPretch         = -1;
-    private int                        rowPrefetch              = -1;
+    private int                       defaultRowPrefetch       = -1;
+    private int                       rowPrefetch              = -1;
 
-    private boolean                    enterOracleImplicitCache = false;
+    private boolean                   enterOracleImplicitCache = false;
 
-    private int                        inUseCount               = 0;
+    private int                       inUseCount               = 0;
+    private boolean                   pooling                  = false;
 
     public PreparedStatementHolder(PreparedStatementKey key, PreparedStatement stmt){
         this.key = key;
@@ -50,12 +51,12 @@ public final class PreparedStatementHolder {
         this.enterOracleImplicitCache = enterOracleImplicitCache;
     }
 
-    public int getDefaultRowPretch() {
-        return defaultRowPretch;
+    public int getDefaultRowPrefetch() {
+        return defaultRowPrefetch;
     }
 
-    public void setDefaultRowPretch(int defaultRowPretch) {
-        this.defaultRowPretch = defaultRowPretch;
+    public void setDefaultRowPrefetch(int defaultRowPrefetch) {
+        this.defaultRowPrefetch = defaultRowPrefetch;
     }
 
     public int getRowPrefetch() {
@@ -76,14 +77,6 @@ public final class PreparedStatementHolder {
         }
     }
 
-    public PreparedStatement getStatement() {
-        return statement;
-    }
-
-    public PreparedStatementKey getKey() {
-        return key;
-    }
-
     public void incrementHitCount() {
         hitCount++;
     }
@@ -99,12 +92,21 @@ public final class PreparedStatementHolder {
     public void incrementInUseCount() {
         inUseCount++;
     }
-    
+
     public void decrementInUseCount() {
         inUseCount--;
     }
-    
+
     public int getInUseCount() {
         return inUseCount;
     }
+
+    public boolean isPooling() {
+        return pooling;
+    }
+
+    public void setPooling(boolean pooling) {
+        this.pooling = pooling;
+    }
+
 }

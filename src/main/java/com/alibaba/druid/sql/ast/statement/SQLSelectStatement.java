@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,22 +15,33 @@
  */
 package com.alibaba.druid.sql.ast.statement;
 
+import com.alibaba.druid.sql.ast.SQLCommentHint;
 import com.alibaba.druid.sql.ast.SQLStatementImpl;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
+import java.util.List;
+
 public class SQLSelectStatement extends SQLStatementImpl {
 
-    private static final long serialVersionUID = 1L;
+    protected SQLSelect select;
 
-    protected SQLSelect         select;
+    private List<SQLCommentHint> headHints;
 
     public SQLSelectStatement(){
 
     }
 
-    public SQLSelectStatement(SQLSelect select){
+    public SQLSelectStatement(String dbType){
+        super (dbType);
+    }
 
-        this.select = select;
+    public SQLSelectStatement(SQLSelect select){
+        this.setSelect(select);
+    }
+
+    public SQLSelectStatement(SQLSelect select, String dbType){
+        this(dbType);
+        this.setSelect(select);
     }
 
     public SQLSelect getSelect() {
@@ -38,6 +49,9 @@ public class SQLSelectStatement extends SQLStatementImpl {
     }
 
     public void setSelect(SQLSelect select) {
+        if (select != null) {
+            select.setParent(this);
+        }
         this.select = select;
     }
 
@@ -50,5 +64,13 @@ public class SQLSelectStatement extends SQLStatementImpl {
             acceptChild(visitor, this.select);
         }
         visitor.endVisit(this);
+    }
+
+    public List<SQLCommentHint> getHeadHintsDirect() {
+        return headHints;
+    }
+
+    public void setHeadHints(List<SQLCommentHint> headHints) {
+        this.headHints = headHints;
     }
 }

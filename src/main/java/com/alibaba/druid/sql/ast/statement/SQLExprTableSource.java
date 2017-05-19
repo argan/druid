@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,21 +15,30 @@
  */
 package com.alibaba.druid.sql.ast.statement;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.alibaba.druid.sql.ast.SQLExpr;
+import com.alibaba.druid.sql.ast.SQLName;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLExprTableSource extends SQLTableSourceImpl {
 
-    private static final long serialVersionUID = 1L;
+    protected SQLExpr expr;
 
-    protected SQLExpr         expr;
+    private List<SQLName>   partitions;
 
     public SQLExprTableSource(){
 
     }
 
     public SQLExprTableSource(SQLExpr expr){
-        this.expr = expr;
+        this(expr, null);
+    }
+
+    public SQLExprTableSource(SQLExpr expr, String alias){
+        this.setExpr(expr);
+        this.setAlias(alias);
     }
 
     public SQLExpr getExpr() {
@@ -37,7 +46,36 @@ public class SQLExprTableSource extends SQLTableSourceImpl {
     }
 
     public void setExpr(SQLExpr expr) {
+        if (expr != null) {
+            expr.setParent(this);
+        }
         this.expr = expr;
+    }
+
+    public List<SQLName> getPartitions() {
+        if (this.partitions == null) {
+            this.partitions = new ArrayList<SQLName>(2);
+        }
+        
+        return partitions;
+    }
+    
+    public int getPartitionSize() {
+        if (this.partitions == null) {
+            return 0;
+        }
+        return this.partitions.size();
+    }
+
+    public void addPartition(SQLName partition) {
+        if (partition != null) {
+            partition.setParent(this);
+        }
+        
+        if (this.partitions == null) {
+            this.partitions = new ArrayList<SQLName>(2);
+        }
+        this.partitions.add(partition);
     }
 
     @Override
@@ -51,4 +89,25 @@ public class SQLExprTableSource extends SQLTableSourceImpl {
     public void output(StringBuffer buf) {
         this.expr.output(buf);
     }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((expr == null) ? 0 : expr.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null) return false;
+        if (getClass() != obj.getClass()) return false;
+        SQLExprTableSource other = (SQLExprTableSource) obj;
+        if (expr == null) {
+            if (other.expr != null) return false;
+        } else if (!expr.equals(other.expr)) return false;
+        return true;
+    }
+
 }

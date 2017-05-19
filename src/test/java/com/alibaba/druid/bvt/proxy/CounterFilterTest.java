@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,29 +28,40 @@ import com.alibaba.druid.filter.FilterChain;
 import com.alibaba.druid.filter.FilterChainImpl;
 import com.alibaba.druid.filter.stat.StatFilter;
 import com.alibaba.druid.mock.MockDriver;
+import com.alibaba.druid.proxy.DruidDriver;
 import com.alibaba.druid.proxy.jdbc.ConnectionProxy;
 import com.alibaba.druid.proxy.jdbc.DataSourceProxyConfig;
 import com.alibaba.druid.proxy.jdbc.DataSourceProxyImpl;
 import com.alibaba.druid.proxy.jdbc.ResultSetProxy;
+import com.alibaba.druid.stat.JdbcDataSourceStat;
+import com.alibaba.druid.stat.JdbcStatManager;
 
 public class CounterFilterTest extends TestCase {
 
     String sql = "SELECT 1";
 
+    protected void tearDown() throws Exception {
+        DruidDriver.getProxyDataSources().clear();
+        Assert.assertEquals(0, JdbcStatManager.getInstance().getSqlList().size());
+    }
+    
     public void test_countFilter() throws Exception {
         DataSourceProxyConfig config = new DataSourceProxyConfig();
         config.setUrl("");
 
+        DataSourceProxyImpl dataSource = new DataSourceProxyImpl(null, config);
+        JdbcDataSourceStat dataSourceStat = dataSource.getDataSourceStat();
+        
         StatFilter filter = new StatFilter();
-        filter.init(new DataSourceProxyImpl(null, config));
+        filter.init(dataSource);
 
-        filter.reset();
+        dataSourceStat.reset();
 
-        Assert.assertNull(StatFilter.getStatFilter(new DataSourceProxyImpl(null, config)));
-        Assert.assertNull(filter.getSqlStat(Integer.MAX_VALUE));
-        Assert.assertNull(filter.getConnectionConnectLastTime());
+        Assert.assertNull(StatFilter.getStatFilter(dataSource));
+        Assert.assertNull(dataSourceStat.getSqlStat(Integer.MAX_VALUE));
+        Assert.assertNull(dataSourceStat.getConnectionStat().getConnectLastTime());
 
-        FilterChain chain = new FilterChainImpl(new DataSourceProxyImpl(null, config)) {
+        FilterChain chain = new FilterChainImpl(dataSource) {
 
             public ConnectionProxy connection_connect(Properties info) throws SQLException {
                 throw new SQLException();
@@ -64,8 +75,8 @@ public class CounterFilterTest extends TestCase {
             error = ex;
         }
         Assert.assertNotNull(error);
-        Assert.assertEquals(1, filter.getConnectionConnectErrorCount());
-        Assert.assertNotNull(filter.getConnectionConnectLastTime());
+        Assert.assertEquals(1, dataSourceStat.getConnectionStat().getConnectErrorCount());
+        Assert.assertNotNull(dataSourceStat.getConnectionStat().getConnectLastTime());
     }
 
     public void test_count_filter() throws Exception {
@@ -90,6 +101,10 @@ public class CounterFilterTest extends TestCase {
 
         conn.close();
         conn.close();
+        
+        dataSource.getCompositeData();
+        dataSource.getProperties();
+        dataSource.getDataSourceMBeanDomain();
     }
 
 }

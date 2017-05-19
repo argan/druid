@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import java.sql.SQLException;
 
 import com.alibaba.druid.util.jdbc.PreparedStatementBase;
 
-public class MockPreparedStatement extends PreparedStatementBase implements PreparedStatement {
+public class MockPreparedStatement extends PreparedStatementBase implements MockStatementBase, PreparedStatement {
 
     private final String sql;
 
@@ -41,15 +41,19 @@ public class MockPreparedStatement extends PreparedStatementBase implements Prep
     @Override
     public ResultSet executeQuery() throws SQLException {
         checkOpen();
+        
+        MockConnection conn = getConnection();
 
-        if (getConnection() != null && getConnection().getDriver() != null) {
-            return getConnection().getDriver().createResultSet(this);
+        if (conn != null && conn.getDriver() != null) {
+            return conn.getDriver().executeQuery(this, sql);
         }
 
-        if (getConnection() != null) {
-            getConnection().handleSleep();
+        if (conn != null) {
+            conn.handleSleep();
+            
+            return conn.getDriver().createMockResultSet(this);
         }
-
+        
         return new MockResultSet(this);
     }
 
@@ -75,4 +79,14 @@ public class MockPreparedStatement extends PreparedStatementBase implements Prep
         return false;
     }
 
+    @Override
+    public ResultSet getResultSet() throws SQLException {
+        checkOpen();
+        
+        if (resultSet == null) {
+            resultSet = this.getConnection().getDriver().createResultSet(this);
+        }
+
+        return resultSet;
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ import com.alibaba.druid.util.Histogram;
 import com.alibaba.druid.util.JMXUtils;
 
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public class JdbcConnectionStat implements JdbcConnectionStatMBean {
 
@@ -68,6 +68,10 @@ public class JdbcConnectionStat implements JdbcConnectionStatMBean {
 
     private final Histogram     histogram             = new Histogram(TimeUnit.SECONDS, new long[] { //
                                                                       1, 5, 15, 60, 300, 1800 });
+
+    public JdbcConnectionStat(){
+
+    }
 
     public void reset() {
         connectingMax.set(0);
@@ -227,7 +231,7 @@ public class JdbcConnectionStat implements JdbcConnectionStatMBean {
         }
 
         long aliveMillis = aliveNano / (1000 * 1000);
-        histogram.recode(aliveMillis);
+        histogram.record(aliveMillis);
     }
 
     public Throwable getErrorLast() {

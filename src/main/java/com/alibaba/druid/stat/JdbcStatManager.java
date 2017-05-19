@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,9 @@
  */
 package com.alibaba.druid.stat;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicLong;
+import com.alibaba.druid.pool.DruidDataSource;
+import com.alibaba.druid.proxy.DruidDriver;
+import com.alibaba.druid.proxy.jdbc.DataSourceProxyImpl;
 
 import javax.management.JMException;
 import javax.management.openmbean.ArrayType;
@@ -29,26 +28,24 @@ import javax.management.openmbean.SimpleType;
 import javax.management.openmbean.TabularData;
 import javax.management.openmbean.TabularDataSupport;
 import javax.management.openmbean.TabularType;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
-import com.alibaba.druid.filter.Filter;
-import com.alibaba.druid.filter.stat.StatFilter;
-import com.alibaba.druid.pool.DruidDataSource;
-import com.alibaba.druid.proxy.DruidDriver;
-import com.alibaba.druid.proxy.jdbc.DataSourceProxyImpl;
+public final class JdbcStatManager implements JdbcStatManagerMBean {
 
-public class JdbcStatManager implements JdbcStatManagerMBean {
+    private final AtomicLong                  sqlIdSeed      = new AtomicLong(1000);
 
-    private final AtomicLong                                sqlIdSeed      = new AtomicLong(1000);
+    private final static JdbcStatManager      instance       = new JdbcStatManager();
 
-    private final static JdbcStatManager                    instance       = new JdbcStatManager();
+    private final JdbcConnectionStat          connectionStat = new JdbcConnectionStat();
+    private final JdbcResultSetStat           resultSetStat  = new JdbcResultSetStat();
+    private final JdbcStatementStat           statementStat  = new JdbcStatementStat();
 
-    private final JdbcConnectionStat                        connectionStat = new JdbcConnectionStat();
-    private final JdbcResultSetStat                         resultSetStat  = new JdbcResultSetStat();
-    private final JdbcStatementStat                         statementStat  = new JdbcStatementStat();
+    private final AtomicLong                  resetCount     = new AtomicLong();
 
-    private final AtomicLong                                resetCount     = new AtomicLong();
-
-    public final ThreadLocal<JdbcStatContext>               contextLocal   = new ThreadLocal<JdbcStatContext>();
+    public final ThreadLocal<JdbcStatContext> contextLocal   = new ThreadLocal<JdbcStatContext>();
 
     private JdbcStatManager(){
 
@@ -63,16 +60,14 @@ public class JdbcStatManager implements JdbcStatManagerMBean {
     }
 
     public JdbcStatContext createStatContext() {
-        JdbcStatContext context = new JdbcStatContext();
-
-        return context;
+        return new JdbcStatContext();
     }
 
     public long generateSqlId() {
         return sqlIdSeed.incrementAndGet();
     }
 
-    public static final JdbcStatManager getInstance() {
+    public static JdbcStatManager getInstance() {
         return instance;
     }
 
@@ -84,7 +79,7 @@ public class JdbcStatManager implements JdbcStatManagerMBean {
         return resultSetStat;
     }
 
-    public JdbcConnectionStat getConnectionstat() {
+    public JdbcConnectionStat getConnectionStat() {
         return connectionStat;
     }
 
@@ -260,9 +255,8 @@ public class JdbcStatManager implements JdbcStatManagerMBean {
         //
         };
 
-        String[] indexDescriptions = indexNames;
         COMPOSITE_TYPE = new CompositeType("DataSourceStatistic", "DataSource Statistic", indexNames,
-                                           indexDescriptions, indexTypes);
+                indexNames, indexTypes);
 
         return COMPOSITE_TYPE;
     }
@@ -298,26 +292,52 @@ public class JdbcStatManager implements JdbcStatManagerMBean {
         TabularType tabularType = new TabularType("SqlListStatistic", "SqlListStatistic", rowType, indexNames);
         TabularData data = new TabularDataSupport(tabularType);
 
-        for (DataSourceProxyImpl dataSource : DruidDriver.getProxyDataSources().values()) {
-            Map<String, JdbcSqlStat> statMap = dataSource.getDataSourceStat().getSqlStatMap();
+        JdbcDataSourceStat globalStat = JdbcDataSourceStat.getGlobal();
+        if (globalStat != null) {
+            Map<String, JdbcSqlStat> statMap = globalStat.getSqlStatMap();
             for (Map.Entry<String, JdbcSqlStat> entry : statMap.entrySet()) {
-                if (entry.getValue().getExecuteCount() == 0) {
+                if (entry.getValue().getExecuteCount() == 0 && entry.getValue().getRunningCount() == 0) {
                     continue;
                 }
-                
+
+                Map<String, Object> map = entry.getValue().getData();
+                map.put("URL", globalStat.getUrl());
+                data.put(new CompositeDataSupport(JdbcSqlStat.getCompositeType(), map));
+            }
+        }
+
+        for (DataSourceProxyImpl dataSource : DruidDriver.getProxyDataSources().values()) {
+            JdbcDataSourceStat druidDataSourceStat = dataSource.getDataSourceStat();
+
+            if (druidDataSourceStat == globalStat) {
+                continue;
+            }
+
+            Map<String, JdbcSqlStat> statMap = druidDataSourceStat.getSqlStatMap();
+            for (Map.Entry<String, JdbcSqlStat> entry : statMap.entrySet()) {
+                if (entry.getValue().getExecuteCount() == 0 && entry.getValue().getRunningCount() == 0) {
+                    continue;
+                }
+
                 Map<String, Object> map = entry.getValue().getData();
                 map.put("URL", dataSource.getUrl());
                 data.put(new CompositeDataSupport(JdbcSqlStat.getCompositeType(), map));
             }
         }
-        
+
         for (DruidDataSource dataSource : DruidDataSourceStatManager.getDruidDataSourceInstances()) {
-            Map<String, JdbcSqlStat> statMap = dataSource.getDataSourceStat().getSqlStatMap();
+            JdbcDataSourceStat druidDataSourceStat = dataSource.getDataSourceStat();
+
+            if (druidDataSourceStat == globalStat) {
+                continue;
+            }
+
+            Map<String, JdbcSqlStat> statMap = druidDataSourceStat.getSqlStatMap();
             for (Map.Entry<String, JdbcSqlStat> entry : statMap.entrySet()) {
-                if (entry.getValue().getExecuteCount() == 0) {
+                if (entry.getValue().getExecuteCount() == 0 && entry.getValue().getRunningCount() == 0) {
                     continue;
                 }
-                
+
                 Map<String, Object> map = entry.getValue().getData();
                 map.put("URL", dataSource.getUrl());
                 data.put(new CompositeDataSupport(JdbcSqlStat.getCompositeType(), map));
@@ -336,28 +356,18 @@ public class JdbcStatManager implements JdbcStatManagerMBean {
 
         final ConcurrentMap<String, DataSourceProxyImpl> dataSources = DruidDriver.getProxyDataSources();
         for (DataSourceProxyImpl dataSource : dataSources.values()) {
-            for (Filter filter : dataSource.getConfig().getFilters()) {
-                if (filter instanceof StatFilter) {
-                    StatFilter countFilter = (StatFilter) filter;
-
-                    ConcurrentMap<Long, JdbcConnectionStat.Entry> connections = countFilter.getConnections();
-                    for (Map.Entry<Long, JdbcConnectionStat.Entry> entry : connections.entrySet()) {
-                        data.put(entry.getValue().getCompositeData());
-                    }
-                }
+            JdbcDataSourceStat dataSourceStat = dataSource.getDataSourceStat();
+            ConcurrentMap<Long, JdbcConnectionStat.Entry> connections = dataSourceStat.getConnections();
+            for (Map.Entry<Long, JdbcConnectionStat.Entry> entry : connections.entrySet()) {
+                data.put(entry.getValue().getCompositeData());
             }
         }
 
         for (DruidDataSource instance : DruidDataSourceStatManager.getDruidDataSourceInstances()) {
-            for (Filter filter : instance.getProxyFilters()) {
-                if (filter instanceof StatFilter) {
-                    StatFilter countFilter = (StatFilter) filter;
-
-                    ConcurrentMap<Long, JdbcConnectionStat.Entry> connections = countFilter.getConnections();
-                    for (Map.Entry<Long, JdbcConnectionStat.Entry> entry : connections.entrySet()) {
-                        data.put(entry.getValue().getCompositeData());
-                    }
-                }
+            JdbcDataSourceStat dataSourceStat = instance.getDataSourceStat();
+            ConcurrentMap<Long, JdbcConnectionStat.Entry> connections = dataSourceStat.getConnections();
+            for (Map.Entry<Long, JdbcConnectionStat.Entry> entry : connections.entrySet()) {
+                data.put(entry.getValue().getCompositeData());
             }
         }
 
@@ -374,21 +384,11 @@ public class JdbcStatManager implements JdbcStatManagerMBean {
 
         final ConcurrentMap<String, DataSourceProxyImpl> dataSources = DruidDriver.getProxyDataSources();
         for (DataSourceProxyImpl dataSource : dataSources.values()) {
-            for (Filter filter : dataSource.getConfig().getFilters()) {
-                if (filter instanceof StatFilter) {
-                    StatFilter countFilter = (StatFilter) filter;
-                    countFilter.reset();
-                }
-            }
+            dataSource.getDataSourceStat().reset();
         }
 
         for (DruidDataSource instance : DruidDataSourceStatManager.getDruidDataSourceInstances()) {
-            for (Filter filter : instance.getProxyFilters()) {
-                if (filter instanceof StatFilter) {
-                    StatFilter countFilter = (StatFilter) filter;
-                    countFilter.reset();
-                }
-            }
+            instance.getDataSourceStat().reset();
         }
     }
 

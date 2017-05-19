@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 /**
  * (created at 2011-7-18)
  */
@@ -78,8 +93,9 @@ public class DDLParserTest extends TestCase {
         MySqlStatementParser parser = new MySqlStatementParser(sql);
         SQLStatement stmt = parser.parseStatementList().get(0);
         parser.match(Token.EOF);
-        String output = SQLUtils.toMySqlString(stmt);
-        Assert.assertEquals("CREATE TEMPORARY TABLE IF NOT EXISTS tb_name (\n\tfid int\n)", output);
+        
+        Assert.assertEquals("CREATE TEMPORARY TABLE IF NOT EXISTS tb_name (\n\tfid int\n)", SQLUtils.toMySqlString(stmt));
+        Assert.assertEquals("create temporary table if not exists tb_name (\n\tfid int\n)", SQLUtils.toMySqlString(stmt, SQLUtils.DEFAULT_LCASE_FORMAT_OPTION));
     }
     
     public void test_createTable_1() throws Exception {
@@ -87,8 +103,9 @@ public class DDLParserTest extends TestCase {
         MySqlStatementParser parser = new MySqlStatementParser(sql);
         SQLStatement stmt = parser.parseStatementList().get(0);
         parser.match(Token.EOF);
-        String output = SQLUtils.toMySqlString(stmt);
-        Assert.assertEquals("CREATE TABLE IF NOT EXISTS tb_name (\n\tfid int\n)", output);
+        
+        Assert.assertEquals("CREATE TABLE IF NOT EXISTS tb_name (\n\tfid int\n)", SQLUtils.toMySqlString(stmt));
+        Assert.assertEquals("create table if not exists tb_name (\n\tfid int\n)", SQLUtils.toMySqlString(stmt, SQLUtils.DEFAULT_LCASE_FORMAT_OPTION));
     }
     
     public void test_createIndex_0() throws Exception {

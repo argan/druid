@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package com.alibaba.druid.filter.stat;
 
 import java.io.InputStream;
+import java.io.Reader;
 import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.NClob;
@@ -23,17 +24,16 @@ import java.sql.SQLException;
 import java.sql.Savepoint;
 import java.util.Date;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicLong;
-
-import javax.management.JMException;
-import javax.management.openmbean.CompositeData;
-import javax.management.openmbean.TabularData;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.alibaba.druid.filter.Filter;
 import com.alibaba.druid.filter.FilterChain;
 import com.alibaba.druid.filter.FilterEventAdapter;
+import com.alibaba.druid.pool.DruidDataSource;
+import com.alibaba.druid.pool.DruidPooledConnection;
 import com.alibaba.druid.proxy.jdbc.CallableStatementProxy;
+import com.alibaba.druid.proxy.jdbc.ClobProxy;
 import com.alibaba.druid.proxy.jdbc.ConnectionProxy;
 import com.alibaba.druid.proxy.jdbc.DataSourceProxy;
 import com.alibaba.druid.proxy.jdbc.JdbcParameter;
@@ -49,20 +49,31 @@ import com.alibaba.druid.stat.JdbcSqlStat;
 import com.alibaba.druid.stat.JdbcStatContext;
 import com.alibaba.druid.stat.JdbcStatManager;
 import com.alibaba.druid.stat.JdbcStatementStat;
+import com.alibaba.druid.support.json.JSONWriter;
 import com.alibaba.druid.support.logging.Log;
 import com.alibaba.druid.support.logging.LogFactory;
+import com.alibaba.druid.support.profile.Profiler;
 
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
     private final static Log          LOG                        = LogFactory.getLog(StatFilter.class);
 
+    private static final String       SYS_PROP_LOG_SLOW_SQL      = "druid.stat.logSlowSql";
+    private static final String       SYS_PROP_SLOW_SQL_MILLIS   = "druid.stat.slowSqlMillis";
+    private static final String       SYS_PROP_MERGE_SQL         = "druid.stat.mergeSql";
+
+    public final static String        ATTR_NAME_CONNECTION_STAT  = "stat.conn";
+    public final static String        ATTR_NAME_STATEMENT_STAT   = "stat.stmt";
     public final static String        ATTR_UPDATE_COUNT          = "stat.updteCount";
     public final static String        ATTR_TRANSACTION           = "stat.tx";
+    public final static String        ATTR_RESULTSET_CLOSED      = "stat.rs.closed";
 
-    protected JdbcDataSourceStat      dataSourceStat;
+    private final Lock                lock                       = new ReentrantLock();
+
+    // protected JdbcDataSourceStat dataSourceStat;
 
     @Deprecated
     protected final JdbcStatementStat statementStat              = JdbcStatManager.getInstance().getStatementStat();
@@ -72,12 +83,10 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
     private boolean                   connectionStackTraceEnable = false;
 
-    protected DataSourceProxy         dataSource;
-
-    protected final AtomicLong        resetCount                 = new AtomicLong();
-
     // 3 seconds is slow sql
     protected long                    slowSqlMillis              = 3 * 1000;
+
+    protected boolean                 logSlowSql                 = false;
 
     private String                    dbType;
 
@@ -94,26 +103,28 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
         this.dbType = dbType;
     }
 
+    public long getSlowSqlMillis() {
+        return slowSqlMillis;
+    }
+
+    public void setSlowSqlMillis(long slowSqlMillis) {
+        this.slowSqlMillis = slowSqlMillis;
+    }
+
+    public boolean isLogSlowSql() {
+        return logSlowSql;
+    }
+
+    public void setLogSlowSql(boolean logSlowSql) {
+        this.logSlowSql = logSlowSql;
+    }
+
     public boolean isConnectionStackTraceEnable() {
         return connectionStackTraceEnable;
     }
 
     public void setConnectionStackTraceEnable(boolean connectionStackTraceEnable) {
         this.connectionStackTraceEnable = connectionStackTraceEnable;
-    }
-
-    public JdbcDataSourceStat getDataSourceStat() {
-        return this.dataSourceStat;
-    }
-
-    public void reset() {
-        dataSourceStat.reset();
-
-        resetCount.incrementAndGet();
-    }
-
-    public long getResetCount() {
-        return resetCount.get();
     }
 
     public boolean isMergeSql() {
@@ -124,7 +135,12 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
         this.mergeSql = mergeSql;
     }
 
+    @Deprecated
     public String mergeSql(String sql) {
+        return this.mergeSql(sql, dbType);
+    }
+
+    public String mergeSql(String sql, String dbType) {
         if (!mergeSql) {
             return sql;
         }
@@ -132,33 +148,34 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
         try {
             sql = ParameterizedOutputVisitorUtils.parameterize(sql, dbType);
         } catch (Exception e) {
-            LOG.error("merge sql error", e);
+            LOG.error("merge sql error, dbType " + dbType + ", sql : " + sql, e);
         }
 
         return sql;
     }
 
     @Override
-    public synchronized void init(DataSourceProxy dataSource) {
-        this.dataSource = dataSource;
+    public void init(DataSourceProxy dataSource) {
+        lock.lock();
+        try {
+            if (this.dbType == null || this.dbType.trim().length() == 0) {
+                this.dbType = dataSource.getDbType();
+            }
 
-        this.dataSourceStat = dataSource.getDataSourceStat();
-
-        if (this.dbType == null || this.dbType.trim().length() == 0) {
-            this.dbType = dataSource.getDbType();
+            configFromProperties(dataSource.getConnectProperties());
+            configFromProperties(System.getProperties());
+        } finally {
+            lock.unlock();
         }
-
-        initFromProperties(dataSource.getConnectProperties());
-        initFromProperties(System.getProperties());
     }
 
-    private void initFromProperties(Properties properties) {
+    public void configFromProperties(Properties properties) {
         if (properties == null) {
             return;
         }
 
         {
-            String property = properties.getProperty("druid.stat.mergeSql");
+            String property = properties.getProperty(SYS_PROP_MERGE_SQL);
             if ("true".equals(property)) {
                 this.mergeSql = true;
             } else if ("false".equals(property)) {
@@ -167,7 +184,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
         }
 
         {
-            String property = properties.getProperty("druid.stat.slowSqlMillis");
+            String property = properties.getProperty(SYS_PROP_SLOW_SQL_MILLIS);
             if (property != null && property.trim().length() > 0) {
                 property = property.trim();
                 try {
@@ -177,15 +194,15 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
                 }
             }
         }
-    }
 
-    @Override
-    public synchronized void destory() {
-        if (dataSource == null) {
-            return;
+        {
+            String property = properties.getProperty(SYS_PROP_LOG_SLOW_SQL);
+            if ("true".equals(property)) {
+                this.logSlowSql = true;
+            } else if ("false".equals(property)) {
+                this.logSlowSql = false;
+            }
         }
-
-        dataSource = null;
     }
 
     public ConnectionProxy connection_connect(FilterChain chain, Properties info) throws SQLException {
@@ -197,6 +214,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
             long nanoSpan;
             long nowTime = System.currentTimeMillis();
 
+            JdbcDataSourceStat dataSourceStat = chain.getDataSource().getDataSourceStat();
             dataSourceStat.getConnectionStat().beforeConnect();
             try {
                 connection = chain.connection_connect(info);
@@ -226,17 +244,20 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
     @Override
     public void connection_close(FilterChain chain, ConnectionProxy connection) throws SQLException {
-        long nowNano = System.nanoTime();
+        if (connection.getCloseCount() == 0) {
+            long nowNano = System.nanoTime();
 
-        dataSourceStat.getConnectionStat().incrementConnectionCloseCount();
+            JdbcDataSourceStat dataSourceStat = chain.getDataSource().getDataSourceStat();
+            dataSourceStat.getConnectionStat().incrementConnectionCloseCount();
 
-        JdbcConnectionStat.Entry connectionInfo = getConnectionInfo(connection);
+            JdbcConnectionStat.Entry connectionInfo = getConnectionInfo(connection);
 
-        long aliveNanoSpan = nowNano - connectionInfo.getEstablishNano();
+            long aliveNanoSpan = nowNano - connectionInfo.getEstablishNano();
 
-        JdbcConnectionStat.Entry existsConnection = dataSourceStat.getConnections().remove(connection.getId());
-        if (existsConnection != null) {
-            dataSourceStat.getConnectionStat().afterClose(aliveNanoSpan);
+            JdbcConnectionStat.Entry existsConnection = dataSourceStat.getConnections().remove(connection.getId());
+            if (existsConnection != null) {
+                dataSourceStat.getConnectionStat().afterClose(aliveNanoSpan);
+            }
         }
 
         chain.connection_close(connection);
@@ -247,6 +268,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
     public void connection_commit(FilterChain chain, ConnectionProxy connection) throws SQLException {
         chain.connection_commit(connection);
 
+        JdbcDataSourceStat dataSourceStat = chain.getDataSource().getDataSourceStat();
         dataSourceStat.getConnectionStat().incrementConnectionCommitCount();
     }
 
@@ -254,8 +276,8 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
     public void connection_rollback(FilterChain chain, ConnectionProxy connection) throws SQLException {
         chain.connection_rollback(connection);
 
+        JdbcDataSourceStat dataSourceStat = chain.getDataSource().getDataSourceStat();
         dataSourceStat.getConnectionStat().incrementConnectionRollbackCount();
-
         dataSourceStat.getConnectionStat().incrementConnectionRollbackCount();
     }
 
@@ -264,11 +286,13 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
                                                                                                        throws SQLException {
         chain.connection_rollback(connection, savepoint);
 
+        JdbcDataSourceStat dataSourceStat = connection.getDirectDataSource().getDataSourceStat();
         dataSourceStat.getConnectionStat().incrementConnectionRollbackCount();
     }
 
     @Override
     public void statementCreateAfter(StatementProxy statement) {
+        JdbcDataSourceStat dataSourceStat = statement.getConnectionProxy().getDirectDataSource().getDataSourceStat();
         dataSourceStat.getStatementStat().incrementCreateCounter();
 
         super.statementCreateAfter(statement);
@@ -276,6 +300,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
     @Override
     public void statementPrepareCallAfter(CallableStatementProxy statement) {
+        JdbcDataSourceStat dataSourceStat = statement.getConnectionProxy().getDirectDataSource().getDataSourceStat();
         dataSourceStat.getStatementStat().incrementPrepareCallCount();
 
         JdbcSqlStat sqlStat = createSqlStat(statement, statement.getSql());
@@ -284,6 +309,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
     @Override
     public void statementPrepareAfter(PreparedStatementProxy statement) {
+        JdbcDataSourceStat dataSourceStat = statement.getConnectionProxy().getDirectDataSource().getDataSourceStat();
         dataSourceStat.getStatementStat().incrementPrepareCounter();
         JdbcSqlStat sqlStat = createSqlStat(statement, statement.getSql());
         statement.setSqlStat(sqlStat);
@@ -293,6 +319,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
     public void statement_close(FilterChain chain, StatementProxy statement) throws SQLException {
         chain.statement_close(statement);
 
+        JdbcDataSourceStat dataSourceStat = chain.getDataSource().getDataSourceStat();
         dataSourceStat.getStatementStat().incrementStatementCloseCounter();
         JdbcStatContext context = JdbcStatManager.getInstance().getStatContext();
         if (context != null) {
@@ -309,7 +336,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
     @Override
     protected void statementExecuteUpdateAfter(StatementProxy statement, String sql, int updateCount) {
-        internalAfterStatementExecute(statement, updateCount);
+        internalAfterStatementExecute(statement, false, updateCount);
     }
 
     @Override
@@ -319,7 +346,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
     @Override
     protected void statementExecuteQueryAfter(StatementProxy statement, String sql, ResultSetProxy resultSet) {
-        internalAfterStatementExecute(statement);
+        internalAfterStatementExecute(statement, true);
     }
 
     @Override
@@ -328,8 +355,8 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
     }
 
     @Override
-    protected void statementExecuteAfter(StatementProxy statement, String sql, boolean result) {
-        internalAfterStatementExecute(statement);
+    protected void statementExecuteAfter(StatementProxy statement, String sql, boolean firstResult) {
+        internalAfterStatementExecute(statement, firstResult);
     }
 
     @Override
@@ -338,7 +365,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
         final int batchSize = statement.getBatchSqlList().size();
         JdbcSqlStat sqlStat = statement.getSqlStat();
-        if (sqlStat == null) {
+        if (sqlStat == null || sqlStat.isRemoved()) {
             sqlStat = createSqlStat(statement, sql);
             statement.setSqlStat(sqlStat);
         }
@@ -353,20 +380,18 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
 
     @Override
     protected void statementExecuteBatchAfter(StatementProxy statement, int[] result) {
-        internalAfterStatementExecute(statement, result);
+        internalAfterStatementExecute(statement, false, result);
 
     }
 
     private final void internalBeforeStatementExecute(StatementProxy statement, String sql) {
-
+        JdbcDataSourceStat dataSourceStat = statement.getConnectionProxy().getDirectDataSource().getDataSourceStat();
         dataSourceStat.getStatementStat().beforeExecute();
 
-        final JdbcStatementStat.Entry statementStat = getStatementInfo(statement);
         final ConnectionProxy connection = statement.getConnectionProxy();
         final JdbcConnectionStat.Entry connectionCounter = getConnectionInfo(connection);
 
-        statementStat.setLastExecuteStartNano(System.nanoTime());
-        statementStat.setLastExecuteSql(sql);
+        statement.setLastExecuteStartNano();
 
         connectionCounter.setLastSql(sql);
 
@@ -377,7 +402,7 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
         // //////////SQL
 
         JdbcSqlStat sqlStat = statement.getSqlStat();
-        if (sqlStat == null) {
+        if (sqlStat == null || sqlStat.isRemoved()) {
             sqlStat = createSqlStat(statement, sql);
             statement.setSqlStat(sqlStat);
         }
@@ -388,132 +413,86 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
             sqlStat.setFile(statContext.getFile());
         }
 
+        boolean inTransaction = false;
+        try {
+            inTransaction = !statement.getConnectionProxy().getAutoCommit();
+        } catch (SQLException e) {
+            LOG.error("getAutoCommit error", e);
+        }
+
         if (sqlStat != null) {
             sqlStat.setExecuteLastStartTime(System.currentTimeMillis());
             sqlStat.incrementRunningCount();
 
-            try {
-                boolean inTransaction = !statement.getConnectionProxy().getAutoCommit();
-                if (inTransaction) {
-                    sqlStat.incrementInTransactionCount();
-                }
-            } catch (SQLException e) {
-                LOG.error("getAutoCommit error", e);
+            if (inTransaction) {
+                sqlStat.incrementInTransactionCount();
             }
         }
+
+        StatFilterContext.getInstance().executeBefore(sql, inTransaction);
+
+        Profiler.enter(sql, Profiler.PROFILE_TYPE_SQL);
     }
 
-    private final void internalAfterStatementExecute(StatementProxy statement, int... updateCountArray) {
+    private final void internalAfterStatementExecute(StatementProxy statement, boolean firstResult,
+                                                     int... updateCountArray) {
+        final long nowNano = System.nanoTime();
+        final long nanos = nowNano - statement.getLastExecuteStartNano();
 
-        final JdbcStatementStat.Entry entry = getStatementInfo(statement);
+        JdbcDataSourceStat dataSourceStat = statement.getConnectionProxy().getDirectDataSource().getDataSourceStat();
+        dataSourceStat.getStatementStat().afterExecute(nanos);
 
-        long nowNano = System.nanoTime();
-
-        long nanoSpan = nowNano - entry.getLastExecuteStartNano();
-
-        dataSourceStat.getStatementStat().afterExecute(nanoSpan);
-
-        // // SQL
         final JdbcSqlStat sqlStat = statement.getSqlStat();
 
         if (sqlStat != null) {
             sqlStat.incrementExecuteSuccessCount();
-            for (int updateCount : updateCountArray) {
-                sqlStat.addUpdateCount(updateCount);
-            }
 
             sqlStat.decrementRunningCount();
-            sqlStat.addExecuteTime(statement.getLastExecuteType(), nanoSpan);
-            statement.setLastExecuteTimeNano(nanoSpan);
+            sqlStat.addExecuteTime(statement.getLastExecuteType(), firstResult, nanos);
+            statement.setLastExecuteTimeNano(nanos);
             if ((!statement.isFirstResultSet()) && statement.getLastExecuteType() == StatementExecuteType.Execute) {
-            	try {
-					int updateCount = statement.getUpdateCount();
-					sqlStat.addUpdateCount(updateCount);
-				} catch (SQLException e) {
-					LOG.error("getUpdateCount error", e);
-				}
+                try {
+                    int updateCount = statement.getUpdateCount();
+                    sqlStat.addUpdateCount(updateCount);
+                } catch (SQLException e) {
+                    LOG.error("getUpdateCount error", e);
+                }
+            } else {
+                for (int updateCount : updateCountArray) {
+                    sqlStat.addUpdateCount(updateCount);
+                    sqlStat.addFetchRowCount(0);
+                    StatFilterContext.getInstance().addUpdateCount(updateCount);
+                }
             }
 
-            long millis = nanoSpan / (1000 * 1000);
+            long millis = nanos / (1000 * 1000);
             if (millis >= slowSqlMillis) {
-                StringBuilder buf = new StringBuilder();
-                buf.append('[');
-                int index = 0;
-                for (JdbcParameter parameter : statement.getParameters().values()) {
-                    if (index != 0) {
-                        buf.append(',');
-                    }
-                    Object value = parameter.getValue();
-                    if (value == null) {
-                        buf.append("null");
-                    } else if (value instanceof String) {
-                        buf.append('"');
-                        String text = (String) value;
-                        if (text.length() > 100) {
-                            for (int i = 0; i < 97; ++i) {
-                                char ch = text.charAt(i);
-                                if (ch == '\'') {
-                                    buf.append('\\');
-                                    buf.append(ch);
-                                } else {
-                                    buf.append(ch);
-                                }
-                            }
-                            buf.append("...");
-                        } else {
-                            for (int i = 0; i < text.length(); ++i) {
-                                char ch = text.charAt(i);
-                                if (ch == '\'') {
-                                    buf.append('\\');
-                                    buf.append(ch);
-                                } else {
-                                    buf.append(ch);
-                                }
-                            }
-                        }
-                        buf.append('"');
-                    } else if (value instanceof Number) {
-                        buf.append(value.toString());
-                    } else if (value instanceof java.util.Date) {
-                        java.util.Date date = (java.util.Date) value;
-                        buf.append(date.getClass().getSimpleName());
-                        buf.append('(');
-                        buf.append(date.getTime());
-                        buf.append(')');
-                    } else if (value instanceof Boolean) {
-                        buf.append(value.toString());
-                    } else if (value instanceof InputStream) {
-                        buf.append("<InputStream>");
-                    } else if (value instanceof Clob) {
-                        buf.append("<Clob>");
-                    } else if (value instanceof NClob) {
-                        buf.append("<NClob>");
-                    } else if (value instanceof Blob) {
-                        buf.append("<Blob>");
-                    } else {
-                        buf.append('<');
-                        buf.append(value.getClass().getName());
-                        buf.append('>');
-                    }
-                    index++;
+                String slowParameters = buildSlowParameters(statement);
+                sqlStat.setLastSlowParameters(slowParameters);
+
+                if (logSlowSql) {
+                    LOG.error("slow sql " + millis + " millis. " + statement.getLastExecuteSql() + "" + slowParameters);
                 }
-                buf.append(']');
-                sqlStat.setLastSlowParameters(buf.toString());
             }
         }
+
+        String sql = statement.getLastExecuteSql();
+        StatFilterContext.getInstance().executeAfter(sql, nanos, null);
+
+        Profiler.release(nanos);
     }
 
     @Override
     protected void statement_executeErrorAfter(StatementProxy statement, String sql, Throwable error) {
 
-        JdbcStatementStat.Entry counter = getStatementInfo(statement);
         ConnectionProxy connection = statement.getConnectionProxy();
         JdbcConnectionStat.Entry connectionCounter = getConnectionInfo(connection);
 
-        long nanoSpan = System.nanoTime() - counter.getLastExecuteStartNano();
+        long nanos = System.nanoTime() - statement.getLastExecuteStartNano();
 
+        JdbcDataSourceStat dataSourceStat = statement.getConnectionProxy().getDirectDataSource().getDataSourceStat();
         dataSourceStat.getStatementStat().error(error);
-        dataSourceStat.getStatementStat().afterExecute(nanoSpan);
+        dataSourceStat.getStatementStat().afterExecute(nanos);
 
         connectionCounter.error(error);
 
@@ -521,219 +500,144 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
         JdbcSqlStat sqlStat = statement.getSqlStat();
 
         if (sqlStat != null) {
+            sqlStat.decrementExecutingCount();
             sqlStat.error(error);
-            sqlStat.addExecuteTime(statement.getLastExecuteType(), nanoSpan);
-            statement.setLastExecuteTimeNano(nanoSpan);
+            sqlStat.addExecuteTime(statement.getLastExecuteType(), statement.isFirstResultSet(), nanos);
+            statement.setLastExecuteTimeNano(nanos);
         }
 
-        super.statement_executeErrorAfter(statement, sql, error);
+        StatFilterContext.getInstance().executeAfter(sql, nanos, error);
+        Profiler.release(nanos);
+    }
+
+    private String buildSlowParameters(StatementProxy statement) {
+        JSONWriter out = new JSONWriter();
+
+        out.writeArrayStart();
+        for (int i = 0, parametersSize = statement.getParametersSize(); i < parametersSize; ++i) {
+            JdbcParameter parameter = statement.getParameter(i);
+            if (i != 0) {
+                out.writeComma();
+            }
+            if (parameter == null) {
+                continue;
+            }
+
+            Object value = parameter.getValue();
+            if (value == null) {
+                out.writeNull();
+            } else if (value instanceof String) {
+                String text = (String) value;
+                if (text.length() > 100) {
+                    out.writeString(text.substring(0, 97) + "...");
+                } else {
+                    out.writeString(text);
+                }
+            } else if (value instanceof Number) {
+                out.writeObject(value);
+            } else if (value instanceof java.util.Date) {
+                out.writeObject(value);
+            } else if (value instanceof Boolean) {
+                out.writeObject(value);
+            } else if (value instanceof InputStream) {
+                out.writeString("<InputStream>");
+            } else if (value instanceof NClob) {
+                out.writeString("<NClob>");
+            } else if (value instanceof Clob) {
+                out.writeString("<Clob>");
+            } else if (value instanceof Blob) {
+                out.writeString("<Blob>");
+            } else {
+                out.writeString('<' + value.getClass().getName() + '>');
+            }
+        }
+        out.writeArrayEnd();
+
+        return out.toString();
     }
 
     @Override
     protected void resultSetOpenAfter(ResultSetProxy resultSet) {
+        JdbcDataSourceStat dataSourceStat = resultSet.getStatementProxy().getConnectionProxy().getDirectDataSource().getDataSourceStat();
         dataSourceStat.getResultSetStat().beforeOpen();
 
         resultSet.setConstructNano();
+
+        StatFilterContext.getInstance().resultSet_open();
     }
 
     @Override
     public void resultSet_close(FilterChain chain, ResultSetProxy resultSet) throws SQLException {
 
-        long nanoSpan = System.nanoTime() - resultSet.getConstructNano();
+        long nanos = System.nanoTime() - resultSet.getConstructNano();
 
-        int fetchCount = resultSet.getFetchRowCount();
+        int fetchRowCount = resultSet.getFetchRowCount();
 
-        dataSourceStat.getResultSetStat().afterClose(nanoSpan);
-
-        dataSourceStat.getResultSetStat().addFetchRowCount(fetchCount);
-
+        JdbcDataSourceStat dataSourceStat = chain.getDataSource().getDataSourceStat();
+        dataSourceStat.getResultSetStat().afterClose(nanos);
+        dataSourceStat.getResultSetStat().addFetchRowCount(fetchRowCount);
         dataSourceStat.getResultSetStat().incrementCloseCounter();
+
+        StatFilterContext.getInstance().addFetchRowCount(fetchRowCount);
 
         String sql = resultSet.getSql();
         if (sql != null) {
             JdbcSqlStat sqlStat = resultSet.getSqlStat();
-            if (sqlStat != null) {
-                sqlStat.addFetchRowCount(fetchCount);
+            if (sqlStat != null && resultSet.getCloseCount() == 0) {
+                sqlStat.addFetchRowCount(fetchRowCount);
                 long stmtExecuteNano = resultSet.getStatementProxy().getLastExecuteTimeNano();
-                sqlStat.addResultSetHoldTimeNano(stmtExecuteNano, nanoSpan);
+                sqlStat.addResultSetHoldTimeNano(stmtExecuteNano, nanos);
+                if (resultSet.getReadStringLength() > 0) {
+                    sqlStat.addStringReadLength(resultSet.getReadStringLength());
+                }
+                if (resultSet.getReadBytesLength() > 0) {
+                    sqlStat.addReadBytesLength(resultSet.getReadBytesLength());
+                }
+                if (resultSet.getOpenInputStreamCount() > 0) {
+                    sqlStat.addInputStreamOpenCount(resultSet.getOpenInputStreamCount());
+                }
+                if (resultSet.getOpenReaderCount() > 0) {
+                    sqlStat.addReaderOpenCount(resultSet.getOpenReaderCount());
+                }
             }
         }
 
         chain.resultSet_close(resultSet);
-    }
 
-    public final static String ATTR_NAME_CONNECTION_STAT = "stat.conn";
-    public final static String ATTR_NAME_STATEMENT_STAT  = "stat.stmt";
+        StatFilterContext.getInstance().resultSet_close(nanos);
+    }
 
     public JdbcConnectionStat.Entry getConnectionInfo(ConnectionProxy connection) {
-        JdbcConnectionStat.Entry counter = (JdbcConnectionStat.Entry) connection.getAttributes().get(ATTR_NAME_CONNECTION_STAT);
+        JdbcConnectionStat.Entry counter = (JdbcConnectionStat.Entry) connection.getAttribute(ATTR_NAME_CONNECTION_STAT);
 
         if (counter == null) {
-            connection.getAttributes().put(ATTR_NAME_CONNECTION_STAT,
-                                           new JdbcConnectionStat.Entry(this.dataSource.getName(), connection.getId()));
-            counter = (JdbcConnectionStat.Entry) connection.getAttributes().get(ATTR_NAME_CONNECTION_STAT);
+            String dataSourceName = connection.getDirectDataSource().getName();
+            connection.putAttribute(ATTR_NAME_CONNECTION_STAT,
+                                           new JdbcConnectionStat.Entry(dataSourceName, connection.getId()));
+            counter = (JdbcConnectionStat.Entry) connection.getAttribute(ATTR_NAME_CONNECTION_STAT);
         }
 
         return counter;
-    }
-
-    public JdbcStatementStat.Entry getStatementInfo(StatementProxy statement) {
-        JdbcStatementStat.Entry counter = (JdbcStatementStat.Entry) statement.getAttributes().get(ATTR_NAME_STATEMENT_STAT);
-
-        if (counter == null) {
-            statement.getAttributes().put(ATTR_NAME_STATEMENT_STAT, new JdbcStatementStat.Entry());
-            counter = (JdbcStatementStat.Entry) statement.getAttributes().get(ATTR_NAME_STATEMENT_STAT);
-        }
-
-        return counter;
-    }
-
-    @Override
-    public long getConnectionActiveCount() {
-        return dataSourceStat.getConnections().size();
-    }
-
-    @Override
-    public long getConnectionCloseCount() {
-        return dataSourceStat.getConnectionStat().getCloseCount();
-    }
-
-    @Override
-    public long getConnectionCommitCount() {
-        return dataSourceStat.getConnectionStat().getCommitCount();
-    }
-
-    @Override
-    public long getConnectionConnectCount() {
-        return dataSourceStat.getConnectionStat().getConnectCount();
-    }
-
-    @Override
-    public long getConnectionConnectMillis() {
-        return dataSourceStat.getConnectionStat().getConnectMillis();
-    }
-
-    @Override
-    public long getConnectionConnectingMax() {
-        return dataSourceStat.getConnectionStat().getConnectingMax();
-    }
-
-    @Override
-    public long getConnectionRollbackCount() {
-        return dataSourceStat.getConnectionStat().getConnectMillis();
-    }
-
-    @Override
-    public long getConnectionConnectAliveMillis() {
-        return dataSourceStat.getConnectionConnectAliveMillis();
-    }
-
-    @Override
-    public long getConnectionConnectErrorCount() {
-        return dataSourceStat.getConnectionStat().getConnectErrorCount();
-    }
-
-    @Override
-    public Date getConnectionConnectLastTime() {
-        return dataSourceStat.getConnectionStat().getConnectLastTime();
-    }
-
-    @Override
-    public long getStatementCloseCount() {
-        return dataSourceStat.getStatementStat().getCloseCount();
-    }
-
-    @Override
-    public long getStatementCreateCount() {
-        return dataSourceStat.getStatementStat().getCreateCount();
-    }
-
-    @Override
-    public long getStatementExecuteMillisTotal() {
-        return dataSourceStat.getStatementStat().getExecuteMillisTotal();
-    }
-
-    @Override
-    public Date getStatementExecuteErrorLastTime() {
-        return dataSourceStat.getStatementStat().getLastErrorTime();
-    }
-
-    @Override
-    public Date getStatementExecuteLastTime() {
-        return dataSourceStat.getStatementStat().getExecuteLastTime();
-    }
-
-    @Override
-    public long getStatementPrepareCallCount() {
-        return dataSourceStat.getStatementStat().getPrepareCallCount();
-    }
-
-    @Override
-    public long getStatementPrepareCount() {
-        return dataSourceStat.getStatementStat().getPrepareCount();
-    }
-
-    @Override
-    public long getStatementExecuteErrorCount() {
-        return dataSourceStat.getStatementStat().getErrorCount();
-    }
-
-    @Override
-    public long getStatementExecuteSuccessCount() {
-        return dataSourceStat.getStatementStat().getExecuteSuccessCount();
-    }
-
-    @Override
-    public long getResultSetHoldMillisTotal() {
-        return dataSourceStat.getResultSetStat().getHoldMillisTotal();
-    }
-
-    @Override
-    public long getResultSetFetchRowCount() {
-        return dataSourceStat.getResultSetStat().getFetchRowCount();
-    }
-
-    @Override
-    public long getResultSetOpenCount() {
-        return dataSourceStat.getResultSetStat().getOpenCount();
-    }
-
-    @Override
-    public long getResultSetCloseCount() {
-        return dataSourceStat.getResultSetStat().getCloseCount();
-    }
-
-    @Override
-    public String getConnectionUrl() {
-        return dataSource.getUrl();
     }
 
     public JdbcSqlStat createSqlStat(StatementProxy statement, String sql) {
+        DataSourceProxy dataSource = statement.getConnectionProxy().getDirectDataSource();
+        JdbcDataSourceStat dataSourceStat = dataSource.getDataSourceStat();
+
         JdbcStatContext context = JdbcStatManager.getInstance().getStatContext();
-    	String contextSql = context != null ? context.getSql() : null;
-    	if (contextSql != null && contextSql.length() > 0) {
-    		return dataSourceStat.createSqlStat(contextSql);
-    	} else {
-    		sql = mergeSql(sql);
-    		return dataSourceStat.createSqlStat(sql);
-    	}
-    }
+        String contextSql = context != null ? context.getSql() : null;
+        if (contextSql != null && contextSql.length() > 0) {
+            return dataSourceStat.createSqlStat(contextSql);
+        } else {
+            String dbType = this.dbType;
 
-    public JdbcSqlStat getSqlCounter(String sql) {
-    	
-    	sql = mergeSql(sql); //mergeSql
-        return getSqlStat(sql);
-    }
+            if (dbType == null) {
+                dbType = dataSource.getDbType();
+            }
 
-    public JdbcSqlStat getSqlStat(String sql) {
-    	
-    	sql = mergeSql(sql);
-        return dataSourceStat.getSqlStat(sql);
-    }
-
-    @Override
-    public TabularData getSqlList() throws JMException {
-        return dataSourceStat.getSqlList();
+            sql = mergeSql(sql, dbType);
+            return dataSourceStat.createSqlStat(sql);
+        }
     }
 
     public static StatFilter getStatFilter(DataSourceProxy dataSource) {
@@ -746,50 +650,392 @@ public class StatFilter extends FilterEventAdapter implements StatFilterMBean {
         return null;
     }
 
-    public JdbcSqlStat getSqlStat(long id) {
-        return dataSourceStat.getSqlStat(id);
+    @Override
+    public void dataSource_releaseConnection(FilterChain chain, DruidPooledConnection conn) throws SQLException {
+        chain.dataSource_recycle(conn);
+
+        long nanos = System.nanoTime() - conn.getConnectedTimeNano();
+
+        long millis = nanos / (1000L * 1000L);
+
+        JdbcDataSourceStat dataSourceStat = chain.getDataSource().getDataSourceStat();
+        dataSourceStat.getConnectionHoldHistogram().record(millis);
+
+        StatFilterContext.getInstance().pool_connection_close(nanos);
     }
 
     @Override
-    public CompositeData getStatementExecuteLastError() throws JMException {
-        return dataSourceStat.getStatementStat().getLastError();
-    }
+    public DruidPooledConnection dataSource_getConnection(FilterChain chain, DruidDataSource dataSource,
+                                                          long maxWaitMillis) throws SQLException {
+        DruidPooledConnection conn = chain.dataSource_connect(dataSource, maxWaitMillis);
 
-    public final ConcurrentMap<Long, JdbcConnectionStat.Entry> getConnections() {
-        return dataSourceStat.getConnections();
+        if (conn != null) {
+            conn.setConnectedTimeNano();
+
+            StatFilterContext.getInstance().pool_connection_open();
+        }
+
+        return conn;
     }
 
     @Override
-    public TabularData getConnectionList() throws JMException {
-        return dataSourceStat.getConnectionList();
+    public Clob resultSet_getClob(FilterChain chain, ResultSetProxy resultSet, int columnIndex) throws SQLException {
+        Clob clob = chain.resultSet_getClob(resultSet, columnIndex);
+
+        if (clob != null) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), resultSet, (ClobProxy) clob);
+        }
+
+        return clob;
     }
 
-    public static enum Feature {
+    @Override
+    public Clob resultSet_getClob(FilterChain chain, ResultSetProxy resultSet, String columnLabel) throws SQLException {
+        Clob clob = chain.resultSet_getClob(resultSet, columnLabel);
 
-        ;
-
-        private Feature(){
-            mask = (1 << ordinal());
+        if (clob != null) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), resultSet, (ClobProxy) clob);
         }
 
-        private final int mask;
+        return clob;
+    }
 
-        public final int getMask() {
-            return mask;
+    @Override
+    public Blob callableStatement_getBlob(FilterChain chain, CallableStatementProxy statement, int parameterIndex)
+                                                                                                                  throws SQLException {
+        Blob blob = chain.callableStatement_getBlob(statement, parameterIndex);
+
+        if (blob != null) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, blob);
         }
 
-        public static boolean isEnabled(int features, Feature feature) {
-            return (features & feature.getMask()) != 0;
+        return blob;
+    }
+
+    @Override
+    public Blob callableStatement_getBlob(FilterChain chain, CallableStatementProxy statement, String parameterName)
+                                                                                                                    throws SQLException {
+        Blob blob = chain.callableStatement_getBlob(statement, parameterName);
+
+        if (blob != null) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, blob);
         }
 
-        public static int config(int features, Feature feature, boolean state) {
-            if (state) {
-                features |= feature.getMask();
-            } else {
-                features &= ~feature.getMask();
+        return blob;
+    }
+
+    @Override
+    public Blob resultSet_getBlob(FilterChain chain, ResultSetProxy result, int columnIndex) throws SQLException {
+        Blob blob = chain.resultSet_getBlob(result, columnIndex);
+
+        if (blob != null) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), result, blob);
+        }
+
+        return blob;
+    }
+
+    @Override
+    public Blob resultSet_getBlob(FilterChain chain, ResultSetProxy result, String columnLabel) throws SQLException {
+        Blob blob = chain.resultSet_getBlob(result, columnLabel);
+
+        if (blob != null) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), result, blob);
+        }
+
+        return blob;
+    }
+
+    @Override
+    public Clob callableStatement_getClob(FilterChain chain, CallableStatementProxy statement, int parameterIndex)
+                                                                                                                  throws SQLException {
+        Clob clob = chain.callableStatement_getClob(statement, parameterIndex);
+
+        if (clob != null) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (ClobProxy) clob);
+        }
+
+        return clob;
+    }
+
+    @Override
+    public Clob callableStatement_getClob(FilterChain chain, CallableStatementProxy statement, String parameterName)
+                                                                                                                    throws SQLException {
+        Clob clob = chain.callableStatement_getClob(statement, parameterName);
+
+        if (clob != null) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (ClobProxy) clob);
+        }
+
+        return clob;
+    }
+
+    @Override
+    public Object resultSet_getObject(FilterChain chain, ResultSetProxy result, int columnIndex) throws SQLException {
+        Object obj = chain.resultSet_getObject(result, columnIndex);
+
+        if (obj instanceof Clob) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), result, (ClobProxy) obj);
+        } else if (obj instanceof Blob) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), result, (Blob) obj);
+        } else if (obj instanceof String) {
+            result.addReadStringLength(((String) obj).length());
+        }
+
+        return obj;
+    }
+
+    @Override
+    public Object resultSet_getObject(FilterChain chain, ResultSetProxy result, int columnIndex,
+                                      java.util.Map<String, Class<?>> map) throws SQLException {
+        Object obj = chain.resultSet_getObject(result, columnIndex, map);
+
+        if (obj instanceof Clob) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), result, (ClobProxy) obj);
+        } else if (obj instanceof Blob) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), result, (Blob) obj);
+        } else if (obj instanceof String) {
+            result.addReadStringLength(((String) obj).length());
+        }
+
+        return obj;
+    }
+
+    @Override
+    public Object resultSet_getObject(FilterChain chain, ResultSetProxy result, String columnLabel) throws SQLException {
+        Object obj = chain.resultSet_getObject(result, columnLabel);
+
+        if (obj instanceof Clob) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), result, (ClobProxy) obj);
+        } else if (obj instanceof Blob) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), result, (Blob) obj);
+        } else if (obj instanceof String) {
+            result.addReadStringLength(((String) obj).length());
+        }
+
+        return obj;
+    }
+
+    @Override
+    public Object resultSet_getObject(FilterChain chain, ResultSetProxy result, String columnLabel,
+                                      java.util.Map<String, Class<?>> map) throws SQLException {
+        Object obj = chain.resultSet_getObject(result, columnLabel, map);
+
+        if (obj instanceof Clob) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), result, (ClobProxy) obj);
+        } else if (obj instanceof Blob) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), result, (Blob) obj);
+        } else if (obj instanceof String) {
+            result.addReadStringLength(((String) obj).length());
+        }
+
+        return obj;
+    }
+
+    @Override
+    public Object callableStatement_getObject(FilterChain chain, CallableStatementProxy statement, int parameterIndex)
+                                                                                                                      throws SQLException {
+        Object obj = chain.callableStatement_getObject(statement, parameterIndex);
+
+        if (obj instanceof Clob) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (ClobProxy) obj);
+        } else if (obj instanceof Blob) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (Blob) obj);
+        }
+
+        return obj;
+    }
+
+    @Override
+    public Object callableStatement_getObject(FilterChain chain, CallableStatementProxy statement, int parameterIndex,
+                                              java.util.Map<String, Class<?>> map) throws SQLException {
+        Object obj = chain.callableStatement_getObject(statement, parameterIndex, map);
+
+        if (obj instanceof Clob) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (ClobProxy) obj);
+        } else if (obj instanceof Blob) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (Blob) obj);
+        }
+
+        return obj;
+    }
+
+    @Override
+    public Object callableStatement_getObject(FilterChain chain, CallableStatementProxy statement, String parameterName)
+                                                                                                                        throws SQLException {
+        Object obj = chain.callableStatement_getObject(statement, parameterName);
+
+        if (obj instanceof Clob) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (ClobProxy) obj);
+        } else if (obj instanceof Blob) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (Blob) obj);
+        }
+
+        return obj;
+    }
+
+    @Override
+    public Object callableStatement_getObject(FilterChain chain, CallableStatementProxy statement,
+                                              String parameterName, java.util.Map<String, Class<?>> map)
+                                                                                                        throws SQLException {
+        Object obj = chain.callableStatement_getObject(statement, parameterName, map);
+
+        if (obj instanceof Clob) {
+            clobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (ClobProxy) obj);
+        } else if (obj instanceof Blob) {
+            blobOpenAfter(chain.getDataSource().getDataSourceStat(), statement, (Blob) obj);
+        }
+
+        return obj;
+    }
+
+    private void blobOpenAfter(JdbcDataSourceStat dataSourceStat, ResultSetProxy rs, Blob blob) {
+        blobOpenAfter(dataSourceStat, rs.getStatementProxy(), blob);
+    }
+
+    private void clobOpenAfter(JdbcDataSourceStat dataSourceStat, ResultSetProxy rs, ClobProxy clob) {
+        clobOpenAfter(dataSourceStat, rs.getStatementProxy(), clob);
+    }
+
+    private void blobOpenAfter(JdbcDataSourceStat dataSourceStat, StatementProxy stmt, Blob blob) {
+        dataSourceStat.incrementBlobOpenCount();
+
+        if (stmt != null) {
+            JdbcSqlStat sqlStat = stmt.getSqlStat();
+            if (sqlStat != null) {
+                sqlStat.incrementBlobOpenCount();
             }
-
-            return features;
         }
+
+        StatFilterContext.getInstance().blob_open();
+    }
+
+    private void clobOpenAfter(JdbcDataSourceStat dataSourceStat, StatementProxy stmt, ClobProxy clob) {
+        dataSourceStat.incrementClobOpenCount();
+
+        if (stmt != null) {
+            JdbcSqlStat sqlStat = stmt.getSqlStat();
+            if (sqlStat != null) {
+                sqlStat.incrementClobOpenCount();
+            }
+        }
+
+        StatFilterContext.getInstance().clob_open();
+    }
+
+    @Override
+    public String resultSet_getString(FilterChain chain, ResultSetProxy result, int columnIndex) throws SQLException {
+        String value = chain.resultSet_getString(result, columnIndex);
+
+        if (value != null) {
+            result.addReadStringLength(value.length());
+        }
+
+        return value;
+    }
+
+    @Override
+    public String resultSet_getString(FilterChain chain, ResultSetProxy result, String columnLabel) throws SQLException {
+        String value = chain.resultSet_getString(result, columnLabel);
+
+        if (value != null) {
+            result.addReadStringLength(value.length());
+        }
+
+        return value;
+    }
+
+    @Override
+    public byte[] resultSet_getBytes(FilterChain chain, ResultSetProxy result, int columnIndex) throws SQLException {
+        byte[] value = chain.resultSet_getBytes(result, columnIndex);
+
+        if (value != null) {
+            result.addReadBytesLength(value.length);
+        }
+
+        return value;
+    }
+
+    @Override
+    public byte[] resultSet_getBytes(FilterChain chain, ResultSetProxy result, String columnLabel) throws SQLException {
+        byte[] value = chain.resultSet_getBytes(result, columnLabel);
+
+        if (value != null) {
+            result.addReadBytesLength(value.length);
+        }
+
+        return value;
+    }
+
+    @Override
+    public InputStream resultSet_getBinaryStream(FilterChain chain, ResultSetProxy result, int columnIndex)
+                                                                                                           throws SQLException {
+        InputStream input = chain.resultSet_getBinaryStream(result, columnIndex);
+
+        if (input != null) {
+            result.incrementOpenInputStreamCount();
+        }
+
+        return input;
+    }
+
+    @Override
+    public InputStream resultSet_getBinaryStream(FilterChain chain, ResultSetProxy result, String columnLabel)
+                                                                                                              throws SQLException {
+        InputStream input = chain.resultSet_getBinaryStream(result, columnLabel);
+
+        if (input != null) {
+            result.incrementOpenInputStreamCount();
+        }
+
+        return input;
+    }
+
+    @Override
+    public InputStream resultSet_getAsciiStream(FilterChain chain, ResultSetProxy result, int columnIndex)
+                                                                                                          throws SQLException {
+        InputStream input = chain.resultSet_getAsciiStream(result, columnIndex);
+
+        if (input != null) {
+            result.incrementOpenInputStreamCount();
+        }
+
+        return input;
+    }
+
+    @Override
+    public InputStream resultSet_getAsciiStream(FilterChain chain, ResultSetProxy result, String columnLabel)
+                                                                                                             throws SQLException {
+        InputStream input = chain.resultSet_getAsciiStream(result, columnLabel);
+
+        if (input != null) {
+            result.incrementOpenInputStreamCount();
+        }
+
+        return input;
+    }
+
+    @Override
+    public Reader resultSet_getCharacterStream(FilterChain chain, ResultSetProxy result, int columnIndex)
+                                                                                                         throws SQLException {
+        Reader reader = chain.resultSet_getCharacterStream(result, columnIndex);
+
+        if (reader != null) {
+            result.incrementOpenReaderCount();
+        }
+
+        return reader;
+    }
+
+    @Override
+    public Reader resultSet_getCharacterStream(FilterChain chain, ResultSetProxy result, String columnLabel)
+                                                                                                            throws SQLException {
+        Reader reader = chain.resultSet_getCharacterStream(result, columnLabel);
+
+        if (reader != null) {
+            result.incrementOpenReaderCount();
+        }
+
+        return reader;
     }
 }

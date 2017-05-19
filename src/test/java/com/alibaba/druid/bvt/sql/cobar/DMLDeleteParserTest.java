@@ -1,4 +1,21 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.bvt.sql.cobar;
+
+import junit.framework.TestCase;
 
 import org.junit.Assert;
 
@@ -6,8 +23,6 @@ import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.SQLStatement;
 import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.alibaba.druid.sql.parser.Token;
-
-import junit.framework.TestCase;
 
 public class DMLDeleteParserTest extends TestCase {
 
@@ -17,8 +32,7 @@ public class DMLDeleteParserTest extends TestCase {
         SQLStatement stmt = parser.parseStatementList().get(0);
         parser.match(Token.EOF);
         String output = SQLUtils.toMySqlString(stmt);
-        Assert.assertEquals("DELETE LOW_PRIORITY FROM id1.id, id\n" + //
-                            "USING t1 a" + //
+        Assert.assertEquals("DELETE LOW_PRIORITY FROM id1.id, id USING (t1) AS a" + //
                             "\nWHERE col1 = ?", output);
     }
 
@@ -38,10 +52,10 @@ public class DMLDeleteParserTest extends TestCase {
         SQLStatement stmt = parser.parseStatementList().get(0);
         parser.match(Token.EOF);
         String output = SQLUtils.toMySqlString(stmt);
-        Assert.assertEquals("DELETE FROM offer.*, wp_image.*\n" + //
-                            "USING offer a, wp_image b\n" + //
+        Assert.assertEquals("DELETE FROM offer.*, wp_image.*" + //
+                            " USING (offer) AS a, wp_image b\n" + //
                             "WHERE a.member_id = b.member_id\n" + //
-                            "AND a.member_id = 'abc'", output);
+                            "\tAND a.member_id = 'abc'", output);
     }
 
     public void testDelete_3() throws Exception {
@@ -76,7 +90,7 @@ public class DMLDeleteParserTest extends TestCase {
         Assert.assertEquals("DELETE id.*\n" + //
                             "FROM t1, t2\n" + //
                             "WHERE col1 = 'adf'\n" + //
-                            "AND col2 = 1", output);
+                            "\tAND col2 = 1", output);
     }
 
     public void testDelete_6() throws Exception {

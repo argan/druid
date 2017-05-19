@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,11 @@ package com.alibaba.druid.bvt.pool;
 import java.sql.Connection;
 import java.util.Properties;
 
-import junit.framework.Assert;
+import org.junit.Assert;
 import junit.framework.TestCase;
 
 import com.alibaba.druid.pool.DruidDataSource;
+import com.alibaba.druid.pool.DruidDataSourceFactory;
 import com.alibaba.druid.stat.DruidDataSourceStatManager;
 import com.alibaba.druid.util.JMXUtils;
 
@@ -33,7 +34,7 @@ import com.alibaba.druid.util.JMXUtils;
 public class Case2 extends TestCase {
 
     protected void setUp() throws Exception {
-        Assert.assertEquals(0, DruidDataSourceStatManager.getInstance().getDataSourceList().size());
+        DruidDataSourceStatManager.clear();
     }
 
     protected void tearDown() throws Exception {
@@ -51,7 +52,7 @@ public class Case2 extends TestCase {
         properties.put("url", "jdbc:mock:");
         properties.put("filters", "stat");
         properties.put("validationQuery", "SELECT 1");
-        final DruidDataSource dataSource = (DruidDataSource) com.alibaba.druid.pool.DruidDataSourceFactory.createDataSource(properties);
+        DruidDataSource dataSource = (DruidDataSource) DruidDataSourceFactory.createDataSource(properties);
         JMXUtils.register("com.alibaba.druid:type=DruidDataSource", dataSource);
 
         final int COUNT = 10;

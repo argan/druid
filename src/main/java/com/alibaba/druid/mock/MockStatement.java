@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import java.sql.Statement;
 
 import com.alibaba.druid.util.jdbc.StatementBase;
 
-public class MockStatement extends StatementBase implements Statement {
+public class MockStatement extends StatementBase implements MockStatementBase, Statement {
 
     public final static String ERROR_SQL = "THROW ERROR";
 
@@ -36,17 +36,17 @@ public class MockStatement extends StatementBase implements Statement {
         }
     }
 
-    protected void checkOpen() throws SQLException, MockConnectionClosedException {
+    protected void checkOpen() throws SQLException {
         if (closed) {
             throw new SQLException();
         }
 
-        if (this.mockConnection != null && this.mockConnection.isClosed()) {
-            throw new MockConnectionClosedException();
+        if (this.mockConnection != null) {
+            mockConnection.checkState();
         }
     }
 
-    public MockConnection getMockConnection() {
+    public MockConnection getConnection() {
         return mockConnection;
     }
 
@@ -86,6 +86,7 @@ public class MockStatement extends StatementBase implements Statement {
         }
 
         if (mockConnection != null) {
+            mockConnection.setLastSql(sql);
             mockConnection.handleSleep();
         }
 

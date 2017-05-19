@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,7 @@
  */
 package com.alibaba.druid.sql.dialect.oracle.ast.stmt;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.FlashbackQueryClause;
@@ -26,9 +24,6 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class OracleSelectJoin extends SQLJoinTableSource implements OracleSelectTableSource {
 
-    private static final long       serialVersionUID = 1L;
-
-    private final List<SQLExpr>     using            = new ArrayList<SQLExpr>();
     protected OracleSelectPivotBase pivot;
     protected FlashbackQueryClause  flashback;
 
@@ -73,10 +68,6 @@ public class OracleSelectJoin extends SQLJoinTableSource implements OracleSelect
         visitor.endVisit(this);
     }
 
-    public List<SQLExpr> getUsing() {
-        return this.using;
-    }
-
     public void output(StringBuffer buf) {
         this.left.output(buf);
         buf.append(JoinType.toString(this.joinType));
@@ -100,4 +91,7 @@ public class OracleSelectJoin extends SQLJoinTableSource implements OracleSelect
         }
     }
 
+    public String toString () {
+        return SQLUtils.toOracleString(this);
+    }
 }

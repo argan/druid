@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,31 @@
  */
 package com.alibaba.druid.sql.ast;
 
+import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public abstract class SQLStatementImpl extends SQLObjectImpl implements SQLStatement {
 
-    private static final long serialVersionUID = 1L;
+    private String dbType;
 
     public SQLStatementImpl(){
 
     }
+    
+    public SQLStatementImpl(String dbType){
+        this.dbType = dbType;
+    }
+    
+    public String getDbType() {
+        return dbType;
+    }
 
-    public void output(StringBuffer buf) {
-        buf.append(super.toString());
+    public void setDbType(String dbType) {
+        this.dbType = dbType;
+    }
+
+    public String toString() {
+        return SQLUtils.toSQLString(this, dbType);
     }
 
     @Override

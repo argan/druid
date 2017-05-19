@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,7 @@
 package com.alibaba.druid.sql.dialect.oracle.parser;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
-import com.alibaba.druid.sql.ast.expr.SQLListExpr;
 import com.alibaba.druid.sql.ast.statement.SQLTableSource;
-import com.alibaba.druid.sql.ast.statement.SQLUpdateSetItem;
 import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleUpdateStatement;
 import com.alibaba.druid.sql.parser.Lexer;
 import com.alibaba.druid.sql.parser.ParserException;
@@ -27,7 +25,7 @@ import com.alibaba.druid.sql.parser.Token;
 
 public class OracleUpdateParser extends SQLStatementParser {
 
-    public OracleUpdateParser(String sql) throws ParserException{
+    public OracleUpdateParser(String sql) {
         super(new OracleExprParser(sql));
     }
 
@@ -35,7 +33,7 @@ public class OracleUpdateParser extends SQLStatementParser {
         super(new OracleExprParser(lexer));
     }
 
-    public OracleUpdateStatement parseUpdateStatement() throws ParserException {
+    public OracleUpdateStatement parseUpdateStatement() {
         OracleUpdateStatement update = new OracleUpdateStatement();
         
         if (lexer.token() == Token.UPDATE) {
@@ -51,11 +49,11 @@ public class OracleUpdateParser extends SQLStatementParser {
             update.setTableSource(tableSource);
 
             if ((update.getAlias() == null) || (update.getAlias().length() == 0)) {
-                update.setAlias(as());
+                update.setAlias(tableAlias());
             }
         }
 
-        parseSet(update);
+        parseUpdateSet(update);
 
         parseWhere(update);
 
@@ -66,11 +64,13 @@ public class OracleUpdateParser extends SQLStatementParser {
         return update;
     }
 
-    private void parseErrorLoging(OracleUpdateStatement update) throws ParserException {
-        if (identifierEquals("LOG")) throw new ParserException("TODO");
+    private void parseErrorLoging(OracleUpdateStatement update) {
+        if (identifierEquals("LOG")) {
+            throw new ParserException("TODO");
+        }
     }
 
-    private void parseReturn(OracleUpdateStatement update) throws ParserException {
+    private void parseReturn(OracleUpdateStatement update) {
         if (identifierEquals("RETURN") || lexer.token() == Token.RETURNING) {
             lexer.nextToken();
 
@@ -102,43 +102,15 @@ public class OracleUpdateParser extends SQLStatementParser {
         }
     }
 
-    private void parseHints(OracleUpdateStatement update) throws ParserException {
-        if (lexer.token() == Token.HINT) {
-            throw new ParserException("TODO");
-        }
+    private void parseHints(OracleUpdateStatement update) {
+        this.exprParser.parseHints(update.getHints());
     }
 
-    private void parseWhere(OracleUpdateStatement update) throws ParserException {
+    private void parseWhere(OracleUpdateStatement update) {
         if (lexer.token() == (Token.WHERE)) {
             lexer.nextToken();
             update.setWhere(this.exprParser.expr());
         }
     }
 
-    private void parseSet(OracleUpdateStatement update) throws ParserException {
-        accept(Token.SET);
-
-        for (;;) {
-            SQLUpdateSetItem item = new SQLUpdateSetItem();
-
-            if (lexer.token() == (Token.LPAREN)) {
-                lexer.nextToken();
-                SQLListExpr list = new SQLListExpr();
-                this.exprParser.exprList(list.getItems());
-                accept(Token.RPAREN);
-                item.setColumn(list);
-            } else {
-                item.setColumn(this.exprParser.primary());
-            }
-            accept(Token.EQ);
-            item.setValue(this.exprParser.expr());
-            update.getItems().add(item);
-
-            if (lexer.token() != Token.COMMA) {
-                break;
-            }
-
-            lexer.nextToken();
-        }
-    }
 }

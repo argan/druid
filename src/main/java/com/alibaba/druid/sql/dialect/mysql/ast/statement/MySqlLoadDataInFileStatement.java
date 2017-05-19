@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlASTVisitor;
 
 public class MySqlLoadDataInFileStatement extends MySqlStatementImpl {
 
-    private static final long   serialVersionUID          = 1L;
     private boolean             lowPriority               = false;
     private boolean             concurrent                = false;
     private boolean             local                     = false;
@@ -49,7 +48,9 @@ public class MySqlLoadDataInFileStatement extends MySqlStatementImpl {
 
     private SQLExpr             ignoreLinesNumber;
 
-    private final List<SQLExpr> setList                   = new ArrayList<SQLExpr>();
+    private List<SQLExpr>  setList                   = new ArrayList<SQLExpr>();
+
+    private List<SQLExpr>  columns                   = new ArrayList<SQLExpr>();
 
     public boolean isLowPriority() {
         return lowPriority;
@@ -188,5 +189,20 @@ public class MySqlLoadDataInFileStatement extends MySqlStatementImpl {
             acceptChild(visitor, setList);
         }
         visitor.endVisit(this);
+    }
+
+    
+    public List<SQLExpr> getColumns() {
+        return columns;
+    }
+
+    
+    public void setColumns(List<SQLExpr> columns) {
+        this.columns = columns;
+    }
+
+    
+    public void setSetList(List<SQLExpr> setList) {
+        this.setList = setList;
     }
 }

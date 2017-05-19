@@ -1,4 +1,21 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.sql.dialect.postgresql.parser;
+
+import static com.alibaba.druid.sql.parser.Token.LITERAL_CHARS;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -6,112 +23,162 @@ import java.util.Map;
 import com.alibaba.druid.sql.parser.Keywords;
 import com.alibaba.druid.sql.parser.Lexer;
 import com.alibaba.druid.sql.parser.Token;
+import com.alibaba.druid.util.JdbcConstants;
 
 public class PGLexer extends Lexer {
 
-    public final static Keywords DEFAULT_MYSQL_KEYWORDS;
+    public final static Keywords DEFAULT_PG_KEYWORDS;
 
     static {
         Map<String, Token> map = new HashMap<String, Token>();
-        map.put("EXISTS", Token.EXISTS);
-        map.put("THEN", Token.THEN);
-        map.put("AS", Token.AS);
-        map.put("GROUP", Token.GROUP);
-        map.put("BY", Token.BY);
-        map.put("HAVING", Token.HAVING);
-        map.put("DELETE", Token.DELETE);
-        map.put("ORDER", Token.ORDER);
-        map.put("INDEX", Token.INDEX);
-        map.put("FOR", Token.FOR);
-        map.put("SCHEMA", Token.SCHEMA);
-        map.put("FOREIGN", Token.FOREIGN);
-        map.put("REFERENCES", Token.REFERENCES);
-        map.put("CHECK", Token.CHECK);
-        map.put("PRIMARY", Token.PRIMARY);
-        map.put("KEY", Token.KEY);
-        map.put("CONSTRAINT", Token.CONSTRAINT);
-        map.put("DEFAULT", Token.DEFAULT);
-        map.put("VIEW", Token.VIEW);
-        map.put("CREATE", Token.CREATE);
-        map.put("VALUES", Token.VALUES);
-        map.put("ALTER", Token.ALTER);
-        map.put("TABLE", Token.TABLE);
-        map.put("DROP", Token.DROP);
-        map.put("SET", Token.SET);
-        map.put("INTO", Token.INTO);
-        map.put("UPDATE", Token.UPDATE);
-        map.put("NULL", Token.NULL);
-        map.put("IS", Token.IS);
-        map.put("NOT", Token.NOT);
-        map.put("SELECT", Token.SELECT);
-        map.put("INSERT", Token.INSERT);
-        map.put("FROM", Token.FROM);
-        map.put("WHERE", Token.WHERE);
-        map.put("AND", Token.AND);
-        map.put("OR", Token.OR);
-        map.put("XOR", Token.XOR);
-        map.put("DISTINCT", Token.DISTINCT);
-        map.put("UNIQUE", Token.UNIQUE);
-        map.put("ALL", Token.ALL);
-        map.put("UNION", Token.UNION);
-        map.put("INTERSECT", Token.INTERSECT);
-        map.put("MINUS", Token.MINUS);
-        map.put("INNER", Token.INNER);
-        map.put("LEFT", Token.LEFT);
-        map.put("RIGHT", Token.RIGHT);
-        map.put("FULL", Token.FULL);
-        map.put("ON", Token.ON);
-        map.put("OUTER", Token.OUTER);
-        map.put("JOIN", Token.JOIN);
-        map.put("NEW", Token.NEW);
-        map.put("CASE", Token.CASE);
-        map.put("WHEN", Token.WHEN);
-        map.put("END", Token.END);
-        map.put("WHEN", Token.WHEN);
-        map.put("ELSE", Token.ELSE);
-        map.put("EXISTS", Token.EXISTS);
-        map.put("CAST", Token.CAST);
-        map.put("IN", Token.IN);
-        map.put("ASC", Token.ASC);
-        map.put("DESC", Token.DESC);
-        map.put("LIKE", Token.LIKE);
-        map.put("ESCAPE", Token.ESCAPE);
-        map.put("BETWEEN", Token.BETWEEN);
-        map.put("INTERVAL", Token.INTERVAL);
-        map.put("LOCK", Token.LOCK);
-        map.put("SOME", Token.SOME);
-        map.put("ANY", Token.ANY);
-        map.put("TRUNCATE", Token.TRUNCATE);
 
+        map.putAll(Keywords.DEFAULT_KEYWORDS.getKeywords());
+
+        map.put("CASCADE", Token.CASCADE);
+        map.put("CONTINUE", Token.CONTINUE);
+        map.put("CURRENT", Token.CURRENT);
+        map.put("FETCH", Token.FETCH);
+        map.put("FIRST", Token.FIRST);
+
+        map.put("IDENTITY", Token.IDENTITY);
         map.put("LIMIT", Token.LIMIT);
+        map.put("NEXT", Token.NEXT);
+        map.put("NOWAIT", Token.NOWAIT);
+        map.put("OF", Token.OF);
+
         map.put("OFFSET", Token.OFFSET);
-        map.put("WINDOW", Token.WINDOW);
+        map.put("ONLY", Token.ONLY);
+        map.put("RECURSIVE", Token.RECURSIVE);
+        map.put("RESTART", Token.RESTART);
+
+        map.put("RESTRICT", Token.RESTRICT);
+        map.put("RETURNING", Token.RETURNING);
         map.put("ROW", Token.ROW);
         map.put("ROWS", Token.ROWS);
-        map.put("ONLY", Token.ONLY);
-        map.put("FIRST", Token.FIRST);
-        map.put("NEXT", Token.NEXT);
-        map.put("FETCH", Token.FETCH);
-        map.put("OF", Token.OF);
         map.put("SHARE", Token.SHARE);
-        map.put("NOWAIT", Token.NOWAIT);
-        map.put("RECURSIVE", Token.RECURSIVE);
-        map.put("WITH", Token.WITH);
-        map.put("RESTART", Token.RESTART);
-        map.put("CONTINUE", Token.CONTINUE);
-        map.put("IDENTITY", Token.IDENTITY);
-        map.put("CASCADE", Token.CASCADE);
-        map.put("RESTRICT", Token.RESTRICT);
-        map.put("USING", Token.USING);
-        map.put("CURRENT", Token.CURRENT);
-        map.put("RETURNING", Token.RETURNING);
-        map.put("OVER", Token.OVER);
+        map.put("SHOW", Token.SHOW);
 
-        DEFAULT_MYSQL_KEYWORDS = new Keywords(map);
+        map.put("USING", Token.USING);
+        map.put("WINDOW", Token.WINDOW);
+        
+        map.put("TRUE", Token.TRUE);
+        map.put("FALSE", Token.FALSE);
+        map.put("ARRAY", Token.ARRAY);
+        map.put("IF", Token.IF);
+        map.put("TYPE", Token.TYPE);
+        map.put("ILIKE", Token.ILIKE);
+
+        DEFAULT_PG_KEYWORDS = new Keywords(map);
     }
 
     public PGLexer(String input){
         super(input);
-        super.keywods = DEFAULT_MYSQL_KEYWORDS;
+        super.keywods = DEFAULT_PG_KEYWORDS;
+        super.dbType = JdbcConstants.POSTGRESQL;
+    }
+    
+    protected void scanString() {
+        mark = pos;
+        boolean hasSpecial = false;
+
+        for (;;) {
+            if (isEOF()) {
+                lexError("unclosed.str.lit");
+                return;
+            }
+
+            ch = charAt(++pos);
+
+            if (ch == '\\') {
+                scanChar();
+                if (!hasSpecial) {
+                    initBuff(bufPos);
+                    arraycopy(mark + 1, buf, 0, bufPos);
+                    hasSpecial = true;
+                }
+
+                putChar('\\');
+                switch (ch) {
+                    case '\0':
+                        putChar('\0');
+                        break;
+                    case '\'':
+                        putChar('\'');
+                        break;
+                    case '"':
+                        putChar('"');
+                        break;
+                    case 'b':
+                        putChar('\b');
+                        break;
+                    case 'n':
+                        putChar('\n');
+                        break;
+                    case 'r':
+                        putChar('\r');
+                        break;
+                    case 't':
+                        putChar('\t');
+                        break;
+                    case '\\':
+                        putChar('\\');
+                        break;
+                    case 'Z':
+                        putChar((char) 0x1A); // ctrl + Z
+                        break;
+                    default:
+                        putChar(ch);
+                        break;
+                }
+                scanChar();
+            }
+
+            if (ch == '\'') {
+                scanChar();
+                if (ch != '\'') {
+                    token = LITERAL_CHARS;
+                    break;
+                } else {
+                    initBuff(bufPos);
+                    arraycopy(mark + 1, buf, 0, bufPos);
+                    hasSpecial = true;
+                    putChar('\'');
+                    putChar('\'');
+                    continue;
+                }
+            }
+
+            if (!hasSpecial) {
+                bufPos++;
+                continue;
+            }
+
+            if (bufPos == buf.length) {
+                putChar(ch);
+            } else {
+                buf[bufPos++] = ch;
+            }
+        }
+
+        if (!hasSpecial) {
+            stringVal = subString(mark + 1, bufPos);
+        } else {
+            stringVal = new String(buf, 0, bufPos);
+        }
+    }
+    
+    public void scanSharp() {
+        scanChar();
+        if (ch == '>') {
+            scanChar();
+            if (ch == '>') {
+                scanChar();
+                token = Token.POUNDGTGT;
+            } else {
+                token = Token.POUNDGT;
+            }
+        } else {
+            token = Token.POUND;
+        }
     }
 }

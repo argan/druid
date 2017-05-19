@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,76 +15,21 @@
  */
 package com.alibaba.druid.filter.stat;
 
-import java.util.Date;
-
-import javax.management.JMException;
-import javax.management.openmbean.CompositeData;
-import javax.management.openmbean.TabularData;
-
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public interface StatFilterMBean {
-
-    void reset();
-
-    boolean isConnectionStackTraceEnable();
-
-    void setConnectionStackTraceEnable(boolean connectionStackTraceEnable);
-
-    String getConnectionUrl();
-
-    long getConnectionConnectCount();
-
-    long getConnectionCloseCount();
-
-    long getConnectionActiveCount();
-
-    long getConnectionConnectingMax();
-
-    long getConnectionCommitCount();
-
-    long getConnectionRollbackCount();
-
-    long getConnectionConnectMillis();
-
-    long getConnectionConnectAliveMillis();
-
-    long getConnectionConnectErrorCount();
-
-    Date getConnectionConnectLastTime();
-
-    long getStatementCreateCount();
-
-    long getStatementPrepareCount();
-
-    long getStatementPrepareCallCount();
-
-    long getStatementCloseCount();
-
-    long getStatementExecuteMillisTotal();
-
-    long getStatementExecuteSuccessCount();
-
-    long getStatementExecuteErrorCount();
-
-    Date getStatementExecuteErrorLastTime();
-
-    CompositeData getStatementExecuteLastError() throws JMException;
-
-    Date getStatementExecuteLastTime();
-
-    long getResultSetHoldMillisTotal();
-
-    long getResultSetFetchRowCount();
-
-    long getResultSetOpenCount();
-
-    long getResultSetCloseCount();
-
-    TabularData getSqlList() throws JMException;
-
-    TabularData getConnectionList() throws JMException;
-
-    long getResetCount();
+    boolean isMergeSql();
+    
+    void setMergeSql(boolean mergeSql);
+    
+    boolean isLogSlowSql();
+    
+    void setLogSlowSql(boolean logSlowSql);
+    
+    String mergeSql(String sql, String dbType);
+    
+    long getSlowSqlMillis();
+    
+    void setSlowSqlMillis(long slowSqlMillis);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,116 +15,43 @@
  */
 package com.alibaba.druid.sql.dialect.oracle.visitor;
 
-import com.alibaba.druid.sql.ast.expr.SQLObjectCreateExpr;
-import com.alibaba.druid.sql.dialect.oracle.ast.OracleOrderBy;
+import com.alibaba.druid.sql.dialect.oracle.ast.OracleDataTypeIntervalDay;
+import com.alibaba.druid.sql.dialect.oracle.ast.OracleDataTypeIntervalYear;
+import com.alibaba.druid.sql.dialect.oracle.ast.OracleDataTypeTimestamp;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.CycleClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.FlashbackQueryClause.AsOfFlashbackQueryClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.FlashbackQueryClause.AsOfSnapshotClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.FlashbackQueryClause.VersionsFlashbackQueryClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.clause.GroupingSetExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.ModelClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleErrorLoggingClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleParameter;
-import com.alibaba.druid.sql.dialect.oracle.ast.clause.OraclePartitionByRangeClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleRangeValuesClause;
+import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleLobStorageClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleReturningClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleStorageClause;
+import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleWithSubqueryEntry;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.PartitionExtensionClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.SampleClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.SearchClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.clause.SubqueryFactoringClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleAggregateExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleAnalytic;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleAnalyticWindowing;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleArgumentExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleBinaryDoubleExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleBinaryFloatExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleCursorExpr;
-import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleDateExpr;
+import com.alibaba.druid.sql.ast.expr.SQLDateExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleDatetimeExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleDbLinkExpr;
-import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleExtractExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleIntervalExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleIsSetExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleOuterExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleRangeExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleSizeExpr;
 import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleSysdateExpr;
-import com.alibaba.druid.sql.dialect.oracle.ast.expr.OracleTimestampExpr;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterIndexStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterProcedureStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterSessionStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterSynonymStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTableAddConstaint;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTableDropPartition;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTableModify;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTableMoveTablespace;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTableRenameTo;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTableSplitPartition;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTableStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTableTruncatePartition;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTablespaceAddDataFile;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTablespaceStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterTriggerStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleAlterViewStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleBlockStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleCommitStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleConstraintState;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleCreateIndexStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleCreateProcedureStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleCreateSequenceStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleCreateTableStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleDeleteStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleExceptionStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleExitStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleExplainStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleExprStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleFetchStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleFileSpecification;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleForStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleGotoStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleGrantStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleIfStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleIfStatement.Else;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleIfStatement.ElseIf;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleInsertStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleLabelStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleLockTableStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleLoopStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleMergeStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleMultiInsertStatement;
+import com.alibaba.druid.sql.dialect.oracle.ast.stmt.*;
 import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleMultiInsertStatement.ConditionalInsertClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleMultiInsertStatement.ConditionalInsertClauseItem;
 import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleMultiInsertStatement.InsertIntoClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleOrderByItem;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OraclePLSQLCommitStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OraclePrimaryKey;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSavePointStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelect;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectForUpdate;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectHierachicalQueryClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectJoin;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectPivot;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectQueryBlock;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectRestriction;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectSubqueryTableSource;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectTableReference;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSelectUnPivot;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleSetTransactionStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleTableExpr;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleTruncateStatement;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleUpdateSetListClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleUpdateSetListMultiColumnItem;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleUpdateSetListSingleColumnItem;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleUpdateSetValueClause;
-import com.alibaba.druid.sql.dialect.oracle.ast.stmt.OracleUpdateStatement;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public interface OracleASTVisitor extends SQLASTVisitor {
-
-    void endVisit(OracleAggregateExpr astNode);
-
-    void endVisit(OracleConstraintState astNode);
 
     void endVisit(OraclePLSQLCommitStatement astNode);
 
@@ -132,29 +59,19 @@ public interface OracleASTVisitor extends SQLASTVisitor {
 
     void endVisit(OracleAnalyticWindowing x);
 
-    void endVisit(OracleDateExpr x);
+    void endVisit(SQLDateExpr x);
 
     void endVisit(OracleDbLinkExpr x);
 
     void endVisit(OracleDeleteStatement x);
 
-    void endVisit(OracleExtractExpr x);
-
     void endVisit(OracleIntervalExpr x);
-
-    void endVisit(SQLObjectCreateExpr x);
-
-    void endVisit(OracleOrderBy x);
 
     void endVisit(OracleOuterExpr x);
 
     void endVisit(OracleSelectForUpdate x);
 
-    void endVisit(OracleSelectHierachicalQueryClause x);
-
     void endVisit(OracleSelectJoin x);
-
-    void endVisit(OracleOrderByItem x);
 
     void endVisit(OracleSelectPivot x);
 
@@ -168,23 +85,7 @@ public interface OracleASTVisitor extends SQLASTVisitor {
 
     void endVisit(OracleSelectUnPivot x);
 
-    void endVisit(OracleTableExpr x);
-
-    void endVisit(OracleTimestampExpr x);
-
-    void endVisit(OracleUpdateSetListClause x);
-
-    void endVisit(OracleUpdateSetListMultiColumnItem x);
-
-    void endVisit(OracleUpdateSetListSingleColumnItem x);
-
-    void endVisit(OracleUpdateSetValueClause x);
-
     void endVisit(OracleUpdateStatement x);
-
-    boolean visit(OracleAggregateExpr astNode);
-
-    boolean visit(OracleConstraintState astNode);
 
     boolean visit(OraclePLSQLCommitStatement astNode);
 
@@ -192,29 +93,19 @@ public interface OracleASTVisitor extends SQLASTVisitor {
 
     boolean visit(OracleAnalyticWindowing x);
 
-    boolean visit(OracleDateExpr x);
+    boolean visit(SQLDateExpr x);
 
     boolean visit(OracleDbLinkExpr x);
 
     boolean visit(OracleDeleteStatement x);
 
-    boolean visit(OracleExtractExpr x);
-
     boolean visit(OracleIntervalExpr x);
-
-    boolean visit(SQLObjectCreateExpr x);
-
-    boolean visit(OracleOrderBy x);
 
     boolean visit(OracleOuterExpr x);
 
     boolean visit(OracleSelectForUpdate x);
 
-    boolean visit(OracleSelectHierachicalQueryClause x);
-
     boolean visit(OracleSelectJoin x);
-
-    boolean visit(OracleOrderByItem x);
 
     boolean visit(OracleSelectPivot x);
 
@@ -227,18 +118,6 @@ public interface OracleASTVisitor extends SQLASTVisitor {
     boolean visit(OracleSelectSubqueryTableSource x);
 
     boolean visit(OracleSelectUnPivot x);
-
-    boolean visit(OracleTableExpr x);
-
-    boolean visit(OracleTimestampExpr x);
-
-    boolean visit(OracleUpdateSetListClause x);
-
-    boolean visit(OracleUpdateSetListMultiColumnItem x);
-
-    boolean visit(OracleUpdateSetListSingleColumnItem x);
-
-    boolean visit(OracleUpdateSetValueClause x);
 
     boolean visit(OracleUpdateStatement x);
 
@@ -262,17 +141,9 @@ public interface OracleASTVisitor extends SQLASTVisitor {
 
     void endVisit(AsOfFlashbackQueryClause x);
 
-    boolean visit(GroupingSetExpr x);
+    boolean visit(OracleWithSubqueryEntry x);
 
-    void endVisit(GroupingSetExpr x);
-
-    boolean visit(SubqueryFactoringClause x);
-
-    void endVisit(SubqueryFactoringClause x);
-
-    boolean visit(SubqueryFactoringClause.Entry x);
-
-    void endVisit(SubqueryFactoringClause.Entry x);
+    void endVisit(OracleWithSubqueryEntry x);
 
     boolean visit(SearchClause x);
 
@@ -338,22 +209,6 @@ public interface OracleASTVisitor extends SQLASTVisitor {
 
     void endVisit(ModelClause x);
 
-    boolean visit(OracleMergeStatement x);
-
-    void endVisit(OracleMergeStatement x);
-
-    boolean visit(OracleMergeStatement.MergeUpdateClause x);
-
-    void endVisit(OracleMergeStatement.MergeUpdateClause x);
-
-    boolean visit(OracleMergeStatement.MergeInsertClause x);
-
-    void endVisit(OracleMergeStatement.MergeInsertClause x);
-
-    boolean visit(OracleErrorLoggingClause x);
-
-    void endVisit(OracleErrorLoggingClause x);
-
     boolean visit(OracleReturningClause x);
 
     void endVisit(OracleReturningClause x);
@@ -381,10 +236,6 @@ public interface OracleASTVisitor extends SQLASTVisitor {
     boolean visit(OracleSelectQueryBlock x);
 
     void endVisit(OracleSelectQueryBlock x);
-
-    boolean visit(OracleBlockStatement x);
-
-    void endVisit(OracleBlockStatement x);
 
     boolean visit(OracleLockTableStatement x);
 
@@ -422,10 +273,6 @@ public interface OracleASTVisitor extends SQLASTVisitor {
 
     void endVisit(OracleSetTransactionStatement x);
 
-    boolean visit(OracleGrantStatement x);
-
-    void endVisit(OracleGrantStatement x);
-
     boolean visit(OracleExplainStatement x);
 
     void endVisit(OracleExplainStatement x);
@@ -441,10 +288,6 @@ public interface OracleASTVisitor extends SQLASTVisitor {
     boolean visit(OracleAlterTableTruncatePartition x);
 
     void endVisit(OracleAlterTableTruncatePartition x);
-
-    boolean visit(OracleAlterTableStatement x);
-
-    void endVisit(OracleAlterTableStatement x);
 
     boolean visit(OracleAlterTableSplitPartition.TableSpaceItem x);
 
@@ -474,18 +317,6 @@ public interface OracleASTVisitor extends SQLASTVisitor {
 
     void endVisit(OracleForStatement x);
 
-    boolean visit(Else x);
-
-    void endVisit(Else x);
-
-    boolean visit(ElseIf x);
-
-    void endVisit(ElseIf x);
-
-    boolean visit(OracleIfStatement x);
-
-    void endVisit(OracleIfStatement x);
-
     boolean visit(OracleRangeExpr x);
 
     void endVisit(OracleRangeExpr x);
@@ -493,14 +324,6 @@ public interface OracleASTVisitor extends SQLASTVisitor {
     boolean visit(OracleAlterIndexStatement x);
 
     void endVisit(OracleAlterIndexStatement x);
-
-    boolean visit(OracleAlterTableAddConstaint x);
-
-    void endVisit(OracleAlterTableAddConstaint x);
-
-    boolean visit(OracleAlterTableRenameTo x);
-
-    void endVisit(OracleAlterTableRenameTo x);
 
     boolean visit(OraclePrimaryKey x);
 
@@ -525,10 +348,6 @@ public interface OracleASTVisitor extends SQLASTVisitor {
     boolean visit(OracleLabelStatement x);
 
     void endVisit(OracleLabelStatement x);
-
-    boolean visit(OracleParameter x);
-
-    void endVisit(OracleParameter x);
 
     boolean visit(OracleCommitStatement x);
 
@@ -570,39 +389,59 @@ public interface OracleASTVisitor extends SQLASTVisitor {
 
     void endVisit(OracleAlterTablespaceStatement x);
 
-    boolean visit(OracleTruncateStatement x);
-
-    void endVisit(OracleTruncateStatement x);
-
-    boolean visit(OracleCreateSequenceStatement x);
-
-    void endVisit(OracleCreateSequenceStatement x);
-
-    boolean visit(OracleRangeValuesClause x);
-
-    void endVisit(OracleRangeValuesClause x);
-
-    boolean visit(OraclePartitionByRangeClause x);
-
-    void endVisit(OraclePartitionByRangeClause x);
-
-    boolean visit(OracleLoopStatement x);
-
-    void endVisit(OracleLoopStatement x);
-
     boolean visit(OracleExitStatement x);
 
     void endVisit(OracleExitStatement x);
 
-    boolean visit(OracleFetchStatement x);
+    boolean visit(OracleConntinueStatement x);
 
-    void endVisit(OracleFetchStatement x);
+    void endVisit(OracleConntinueStatement x);
+
+    boolean visit(OracleRaiseStatement x);
+
+    void endVisit(OracleRaiseStatement x);
 
     boolean visit(OracleSavePointStatement x);
 
     void endVisit(OracleSavePointStatement x);
 
-    boolean visit(OracleCreateProcedureStatement x);
+    boolean visit(OracleCreateDatabaseDbLinkStatement x);
 
-    void endVisit(OracleCreateProcedureStatement x);
+    void endVisit(OracleCreateDatabaseDbLinkStatement x);
+
+    boolean visit(OracleDropDbLinkStatement x);
+
+    void endVisit(OracleDropDbLinkStatement x);
+
+    boolean visit(OracleDataTypeTimestamp x);
+
+    void endVisit(OracleDataTypeTimestamp x);
+
+    boolean visit(OracleDataTypeIntervalYear x);
+
+    void endVisit(OracleDataTypeIntervalYear x);
+
+    boolean visit(OracleDataTypeIntervalDay x);
+
+    void endVisit(OracleDataTypeIntervalDay x);
+
+    boolean visit(OracleUsingIndexClause x);
+
+    void endVisit(OracleUsingIndexClause x);
+
+    boolean visit(OracleLobStorageClause x);
+
+    void endVisit(OracleLobStorageClause x);
+
+    boolean visit(OracleUnique x);
+
+    void endVisit(OracleUnique x);
+
+    boolean visit(OracleForeignKey x);
+
+    void endVisit(OracleForeignKey x);
+
+    boolean visit(OracleCheck x);
+
+    void endVisit(OracleCheck x);
 }

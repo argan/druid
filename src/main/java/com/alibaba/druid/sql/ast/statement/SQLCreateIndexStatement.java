@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.sql.ast.statement;
 
 import java.util.ArrayList;
@@ -5,27 +20,38 @@ import java.util.List;
 
 import com.alibaba.druid.sql.ast.SQLName;
 import com.alibaba.druid.sql.ast.SQLStatementImpl;
+import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLCreateIndexStatement extends SQLStatementImpl implements SQLDDLStatement {
 
-    /**
-     * 
-     */
-    private static final long          serialVersionUID = 1L;
-
     private SQLName                    name;
 
-    private SQLName                    table;
+    private SQLTableSource             table;
 
-    private List<SQLSelectOrderByItem> items            = new ArrayList<SQLSelectOrderByItem>();
+    private List<SQLSelectOrderByItem> items = new ArrayList<SQLSelectOrderByItem>();
 
     private String                     type;
+    
+    // for mysql
+    private String                     using;
 
-    public SQLName getTable() {
+    public SQLCreateIndexStatement(){
+
+    }
+    
+    public SQLCreateIndexStatement(String dbType){
+        super (dbType);
+    }
+
+    public SQLTableSource getTable() {
         return table;
     }
 
     public void setTable(SQLName table) {
+        this.setTable(new SQLExprTableSource(table));
+    }
+
+    public void setTable(SQLTableSource table) {
         this.table = table;
     }
 
@@ -33,8 +59,11 @@ public class SQLCreateIndexStatement extends SQLStatementImpl implements SQLDDLS
         return items;
     }
 
-    public void setItems(List<SQLSelectOrderByItem> items) {
-        this.items = items;
+    public void addItem(SQLSelectOrderByItem item) {
+        if (item != null) {
+            item.setParent(this);
+        }
+        this.items.add(item);
     }
 
     public SQLName getName() {
@@ -52,5 +81,22 @@ public class SQLCreateIndexStatement extends SQLStatementImpl implements SQLDDLS
     public void setType(String type) {
         this.type = type;
     }
+    
+    public String getUsing() {
+        return using;
+    }
 
+    public void setUsing(String using) {
+        this.using = using;
+    }
+
+    @Override
+    protected void accept0(SQLASTVisitor visitor) {
+        if (visitor.visit(this)) {
+            acceptChild(visitor, getName());
+            acceptChild(visitor, getTable());
+            acceptChild(visitor, getItems());
+        }
+        visitor.endVisit(this);
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,14 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import com.alibaba.druid.pool.DruidPooledPreparedStatement.PreparedStatementKey;
+import com.alibaba.druid.proxy.jdbc.CallableStatementProxy;
+import com.alibaba.druid.proxy.jdbc.PreparedStatementProxy;
 import com.alibaba.druid.support.logging.Log;
 import com.alibaba.druid.support.logging.LogFactory;
 import com.alibaba.druid.util.OracleUtils;
 
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public class PreparedStatementPool {
 
@@ -37,7 +39,7 @@ public class PreparedStatementPool {
     private final LRUCache                map;
     private final DruidAbstractDataSource dataSource;
 
-    public PreparedStatementPool(ConnectionHolder holder){
+    public PreparedStatementPool(DruidConnectionHolder holder){
         this.dataSource = holder.getDataSource();
         int initCapacity = holder.getDataSource().getMaxPoolPreparedStatementPerConnectionSize();
         if (initCapacity <= 0) {
@@ -57,11 +59,11 @@ public class PreparedStatementPool {
             if (holder.isInUse() && (!dataSource.isSharePreparedStatements())) {
                 return null;
             }
-            
+
             holder.incrementHitCount();
             dataSource.incrementCachedPreparedStatementHitCount();
             if (holder.isEnterOracleImplicitCache()) {
-                OracleUtils.exitImplicitCacheToActive(holder.getStatement());
+                OracleUtils.exitImplicitCacheToActive(holder.statement);
             }
         } else {
             dataSource.incrementCachedPreparedStatementMissCount();
@@ -70,8 +72,16 @@ public class PreparedStatementPool {
         return holder;
     }
 
-    public void put(PreparedStatementHolder holder) throws SQLException {
-        PreparedStatement stmt = holder.getStatement();
+    public void remove(PreparedStatementHolder stmtHolder) throws SQLException {
+        if (stmtHolder == null) {
+            return;
+        }
+        map.remove(stmtHolder.key);
+        closeRemovedStatement(stmtHolder);
+    }
+
+    public void put(PreparedStatementHolder stmtHolder) throws SQLException {
+        PreparedStatement stmt = stmtHolder.statement;
 
         if (stmt == null) {
             return;
@@ -79,46 +89,98 @@ public class PreparedStatementPool {
 
         if (dataSource.isOracle() && dataSource.isUseOracleImplicitCache()) {
             OracleUtils.enterImplicitCache(stmt);
-            holder.setEnterOracleImplicitCache(true);
+            stmtHolder.setEnterOracleImplicitCache(true);
         } else {
-            holder.setEnterOracleImplicitCache(false);
+            stmtHolder.setEnterOracleImplicitCache(false);
         }
 
-        PreparedStatementKey key = holder.getKey();
+        PreparedStatementHolder oldStmtHolder = map.put(stmtHolder.key, stmtHolder);
 
-        PreparedStatementHolder oldHolder = map.put(key, holder);
-        if (oldHolder != null && oldHolder != holder) {
-            dataSource.closePreapredStatement(oldHolder);
+        if (oldStmtHolder == stmtHolder) {
+            return;
+        }
+
+        if (oldStmtHolder != null) {
+            oldStmtHolder.setPooling(false);
+            closeRemovedStatement(oldStmtHolder);
         } else {
-            if (holder.getHitCount() == 0) {
+            if (stmtHolder.getHitCount() == 0) {
                 dataSource.incrementCachedPreparedStatementCount();
             }
         }
 
+        stmtHolder.setPooling(true);
+
+        if (LOG.isDebugEnabled()) {
+            String message = null;
+            if (stmtHolder.statement instanceof PreparedStatementProxy) {
+                PreparedStatementProxy stmtProxy = (PreparedStatementProxy) stmtHolder.statement;
+                if (stmtProxy instanceof CallableStatementProxy) {
+                    message = "{conn-" + stmtProxy.getConnectionProxy().getId() + ", cstmt-" + stmtProxy.getId()
+                              + "} enter cache";
+                } else {
+                    message = "{conn-" + stmtProxy.getConnectionProxy().getId() + ", pstmt-" + stmtProxy.getId()
+                              + "} enter cache";
+                }
+            } else {
+                message = "stmt enter cache";
+            }
+
+            LOG.debug(message);
+        }
     }
 
-    public void clear() throws SQLException {
+    public void clear() {
         Iterator<Entry<PreparedStatementKey, PreparedStatementHolder>> iter = map.entrySet().iterator();
         while (iter.hasNext()) {
             Entry<PreparedStatementKey, PreparedStatementHolder> entry = iter.next();
 
-            closeStatement(entry.getValue());
+            closeRemovedStatement(entry.getValue());
 
             iter.remove();
         }
     }
 
-    private void closeStatement(PreparedStatementHolder holder) throws SQLException {
+    public void closeRemovedStatement(PreparedStatementHolder holder) {
+        if (LOG.isDebugEnabled()) {
+            String message = null;
+            if (holder.statement instanceof PreparedStatementProxy) {
+                PreparedStatementProxy stmtProxy = (PreparedStatementProxy) holder.statement;
+                if (stmtProxy instanceof CallableStatementProxy) {
+                    message = "{conn-" + stmtProxy.getConnectionProxy().getId() + ", cstmt-" + stmtProxy.getId()
+                              + "} exit cache";
+                } else {
+                    message = "{conn-" + stmtProxy.getConnectionProxy().getId() + ", pstmt-" + stmtProxy.getId()
+                              + "} exit cache";
+                }
+            } else {
+                message = "stmt exit cache";
+            }
+
+            LOG.debug(message);
+        }
+
+        holder.setPooling(false);
+        if (holder.isInUse()) {
+            return;
+        }
+
         if (holder.isEnterOracleImplicitCache()) {
-            OracleUtils.exitImplicitCacheToClose(holder.getStatement());
+            try {
+                OracleUtils.exitImplicitCacheToClose(holder.statement);
+            } catch (Exception ex) {
+                LOG.error("exitImplicitCacheToClose error", ex);
+            }
         }
         dataSource.closePreapredStatement(holder);
-        dataSource.decrementCachedPreparedStatementCount();
-        dataSource.incrementCachedPreparedStatementDeleteCount();
     }
 
     public Map<PreparedStatementKey, PreparedStatementHolder> getMap() {
         return map;
+    }
+
+    public int size() {
+        return this.map.size();
     }
 
     public class LRUCache extends LinkedHashMap<PreparedStatementKey, PreparedStatementHolder> {
@@ -133,11 +195,7 @@ public class PreparedStatementPool {
             boolean remove = (size() > dataSource.getMaxPoolPreparedStatementPerConnectionSize());
 
             if (remove) {
-                try {
-                    closeStatement(eldest.getValue());
-                } catch (SQLException e) {
-                    LOG.error("closeStatement error", e);
-                }
+                closeRemovedStatement(eldest.getValue());
             }
 
             return remove;

@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,9 @@ import com.alibaba.druid.sql.ast.SQLStatement;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLInsertStatement extends SQLInsertInto implements SQLStatement {
+    private String dbType;
 
-    private static final long serialVersionUID = 1L;
+    protected boolean upsert = false; // for phoenix
 
     public SQLInsertStatement(){
 
@@ -36,17 +37,40 @@ public class SQLInsertStatement extends SQLInsertInto implements SQLStatement {
         if (visitor.visit(this)) {
             this.acceptChild(visitor, tableSource);
             this.acceptChild(visitor, columns);
-            this.acceptChild(visitor, values);
+            this.acceptChild(visitor, valuesList);
             this.acceptChild(visitor, query);
         }
 
         visitor.endVisit(this);
     }
 
+    public boolean isUpsert() {
+        return upsert;
+    }
+
+    public void setUpsert(boolean upsert) {
+        this.upsert = upsert;
+    }
+
     public static class ValuesClause extends SQLObjectImpl {
 
-        private static final long   serialVersionUID = 1L;
-        private final List<SQLExpr> values           = new ArrayList<SQLExpr>();
+        private final List<SQLExpr> values;
+
+        public ValuesClause(){
+            this(new ArrayList<SQLExpr>());
+        }
+
+        public ValuesClause(List<SQLExpr> values){
+            this.values = values;
+            for (int i = 0; i < values.size(); ++i) {
+                values.get(i).setParent(this);
+            }
+        }
+
+        public void addValue(SQLExpr value) {
+            value.setParent(this);
+            values.add(value);
+        }
 
         public List<SQLExpr> getValues() {
             return values;
@@ -71,5 +95,14 @@ public class SQLInsertStatement extends SQLInsertInto implements SQLStatement {
 
             visitor.endVisit(this);
         }
+    }
+
+    @Override
+    public String getDbType() {
+        return dbType;
+    }
+    
+    public void setDbType(String dbType) {
+        this.dbType = dbType;
     }
 }

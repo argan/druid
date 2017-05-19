@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,22 +21,27 @@ import java.util.List;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.SQLExprImpl;
+import com.alibaba.druid.sql.ast.SQLKeep;
+import com.alibaba.druid.sql.ast.SQLOrderBy;
+import com.alibaba.druid.sql.ast.SQLOver;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLAggregateExpr extends SQLExprImpl implements Serializable {
 
     private static final long     serialVersionUID = 1L;
     protected String              methodName;
-    protected int                 option;
+    protected SQLAggregateOption  option;
     protected final List<SQLExpr> arguments        = new ArrayList<SQLExpr>();
+    protected SQLKeep             keep;
+    protected SQLOver             over;
+    protected SQLOrderBy          withinGroup;
+    protected boolean             ignoreNulls      = false;
 
     public SQLAggregateExpr(String methodName){
-
         this.methodName = methodName;
-        this.option = 1;
     }
 
-    public SQLAggregateExpr(String methodName, int option){
+    public SQLAggregateExpr(String methodName, SQLAggregateOption option){
         this.methodName = methodName;
         this.option = option;
     }
@@ -49,32 +54,73 @@ public class SQLAggregateExpr extends SQLExprImpl implements Serializable {
         this.methodName = methodName;
     }
 
-    public int getOption() {
+    public SQLOrderBy getWithinGroup() {
+        return withinGroup;
+    }
+
+    public void setWithinGroup(SQLOrderBy withinGroup) {
+        if (withinGroup != null) {
+            withinGroup.setParent(this);
+        }
+
+        this.withinGroup = withinGroup;
+    }
+
+    public SQLAggregateOption getOption() {
         return this.option;
     }
 
-    public void setOption(int option) {
+    public void setOption(SQLAggregateOption option) {
         this.option = option;
     }
 
     public List<SQLExpr> getArguments() {
         return this.arguments;
     }
-
-    public void output(StringBuffer buf) {
-        buf.append(this.methodName);
-        buf.append("(");
-        int i = 0;
-        for (int size = this.arguments.size(); i < size; ++i) {
-            ((SQLExpr) this.arguments.get(i)).output(buf);
+    
+    public void addArgument(SQLExpr argument) {
+        if (argument != null) {
+            argument.setParent(this);
         }
-        buf.append(")");
+        this.arguments.add(argument);
     }
+
+    public SQLOver getOver() {
+        return over;
+    }
+
+    public void setOver(SQLOver over) {
+        if (over != null) {
+            over.setParent(this);
+        }
+        this.over = over;
+    }
+    
+    public SQLKeep getKeep() {
+        return keep;
+    }
+
+    public void setKeep(SQLKeep keep) {
+        if (keep != null) {
+            keep.setParent(this);
+        }
+        this.keep = keep;
+    }
+    
+    public boolean isIgnoreNulls() {
+        return this.ignoreNulls;
+    }
+
+    public void setIgnoreNulls(boolean ignoreNulls) {
+        this.ignoreNulls = ignoreNulls;
+    }
+
 
     @Override
     protected void accept0(SQLASTVisitor visitor) {
         if (visitor.visit(this)) {
             acceptChild(visitor, this.arguments);
+            acceptChild(visitor, this.over);
         }
 
         visitor.endVisit(this);
@@ -86,7 +132,8 @@ public class SQLAggregateExpr extends SQLExprImpl implements Serializable {
         int result = 1;
         result = prime * result + ((arguments == null) ? 0 : arguments.hashCode());
         result = prime * result + ((methodName == null) ? 0 : methodName.hashCode());
-        result = prime * result + option;
+        result = prime * result + ((option == null) ? 0 : option.hashCode());
+        result = prime * result + ((over == null) ? 0 : over.hashCode());
         return result;
     }
 
@@ -116,9 +163,17 @@ public class SQLAggregateExpr extends SQLExprImpl implements Serializable {
         } else if (!methodName.equals(other.methodName)) {
             return false;
         }
+        if (over == null) {
+            if (other.over != null) {
+                return false;
+            }
+        } else if (!over.equals(other.over)) {
+            return false;
+        }
         if (option != other.option) {
             return false;
         }
         return true;
     }
+
 }

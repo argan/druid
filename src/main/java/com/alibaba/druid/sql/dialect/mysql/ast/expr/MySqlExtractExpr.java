@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class MySqlExtractExpr extends SQLExprImpl implements MySqlExpr {
 
-    private static final long serialVersionUID = 1L;
-
     private SQLExpr           value;
     private MySqlIntervalUnit unit;
 
@@ -44,13 +42,6 @@ public class MySqlExtractExpr extends SQLExprImpl implements MySqlExpr {
 
     public void setUnit(MySqlIntervalUnit unit) {
         this.unit = unit;
-    }
-
-    @Override
-    public void output(StringBuffer buf) {
-        value.output(buf);
-        buf.append(' ');
-        buf.append(unit.name());
     }
 
     protected void accept0(SQLASTVisitor visitor) {

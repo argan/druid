@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,16 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLDeleteStatement extends SQLStatementImpl {
 
-    private static final long serialVersionUID = 1L;
-    protected SQLTableSource  tableSource;
-    protected SQLExpr         where;
+    protected SQLTableSource tableSource;
+    protected SQLExpr        where;
+    protected SQLTableSource from;
 
     public SQLDeleteStatement(){
 
+    }
+    
+    public SQLDeleteStatement(String dbType){
+        super (dbType);
     }
 
     public SQLTableSource getTableSource() {
@@ -44,11 +48,30 @@ public class SQLDeleteStatement extends SQLStatementImpl {
     }
 
     public void setTableSource(SQLTableSource tableSource) {
+        if (tableSource != null) {
+            tableSource.setParent(this);
+        }
         this.tableSource = tableSource;
     }
 
     public SQLName getTableName() {
-        return (SQLName) getExprTableSource().getExpr();
+        if (this.tableSource instanceof SQLExprTableSource) {
+            SQLExprTableSource exprTableSource = (SQLExprTableSource) this.tableSource;
+            return (SQLName) exprTableSource.getExpr();
+        }
+
+        if (tableSource instanceof SQLSubqueryTableSource) {
+            SQLSelectQuery selectQuery = ((SQLSubqueryTableSource) tableSource).getSelect().getQuery();
+            if (selectQuery instanceof SQLSelectQueryBlock) {
+                SQLTableSource subQueryTableSource = ((SQLSelectQueryBlock) selectQuery).getFrom();
+                if (subQueryTableSource instanceof SQLExprTableSource) {
+                    SQLExpr subQueryTableSourceExpr = ((SQLExprTableSource) subQueryTableSource).getExpr();
+                    return (SQLName) subQueryTableSourceExpr;
+                }
+            }
+        }
+
+        return null;
     }
 
     public void setTableName(SQLName tableName) {
@@ -64,6 +87,9 @@ public class SQLDeleteStatement extends SQLStatementImpl {
     }
 
     public void setWhere(SQLExpr where) {
+        if (where != null) {
+            where.setParent(this);
+        }
         this.where = where;
     }
 
@@ -85,4 +111,14 @@ public class SQLDeleteStatement extends SQLStatementImpl {
         visitor.endVisit(this);
     }
 
+    public SQLTableSource getFrom() {
+        return from;
+    }
+
+    public void setFrom(SQLTableSource from) {
+        if (from != null) {
+            from.setParent(this);
+        }
+        this.from = from;
+    }
 }

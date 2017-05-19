@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,26 +25,33 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLUpdateStatement extends SQLStatementImpl {
 
-    private static final long            serialVersionUID = 1L;
-
-    protected final List<SQLUpdateSetItem> items            = new ArrayList<SQLUpdateSetItem>();
+    protected final List<SQLUpdateSetItem> items = new ArrayList<SQLUpdateSetItem>();
     protected SQLExpr                      where;
+    protected SQLTableSource               from;
 
     protected SQLTableSource               tableSource;
+    protected List<SQLExpr>                returning;
 
     public SQLUpdateStatement(){
 
+    }
+    
+    public SQLUpdateStatement(String dbType){
+        super (dbType);
     }
 
     public SQLTableSource getTableSource() {
         return tableSource;
     }
-    
+
     public void setTableSource(SQLExpr expr) {
         this.setTableSource(new SQLExprTableSource(expr));
     }
 
     public void setTableSource(SQLTableSource tableSource) {
+        if (tableSource != null) {
+            tableSource.setParent(this);
+        }
         this.tableSource = tableSource;
     }
 
@@ -61,11 +68,38 @@ public class SQLUpdateStatement extends SQLStatementImpl {
     }
 
     public void setWhere(SQLExpr where) {
+        if (where != null) {
+            where.setParent(this);
+        }
         this.where = where;
     }
 
     public List<SQLUpdateSetItem> getItems() {
         return items;
+    }
+    
+    public void addItem(SQLUpdateSetItem item) {
+        this.items.add(item);
+        item.setParent(this);
+    }
+
+    public List<SQLExpr> getReturning() {
+        if (returning == null) {
+            returning = new ArrayList<SQLExpr>(2);
+        }
+
+        return returning;
+    }
+
+    public SQLTableSource getFrom() {
+        return from;
+    }
+
+    public void setFrom(SQLTableSource from) {
+        if (from != null) {
+            from.setParent(this);
+        }
+        this.from = from;
     }
 
     @Override

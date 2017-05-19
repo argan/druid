@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,7 @@
  */
 package com.alibaba.druid.sql.parser;
 
-import com.alibaba.druid.sql.ast.SQLName;
-import com.alibaba.druid.sql.ast.statement.SQLTableConstaint;
+import com.alibaba.druid.sql.ast.statement.SQLTableConstraint;
 
 public class SQLDDLParser extends SQLStatementParser {
 
@@ -28,14 +27,14 @@ public class SQLDDLParser extends SQLStatementParser {
         super(exprParser);
     }
 
-    protected SQLTableConstaint parseConstraint() {
-        SQLName name = null;
+    protected SQLTableConstraint parseConstraint() {
         if (lexer.token() == Token.CONSTRAINT) {
             lexer.nextToken();
         }
 
         if (lexer.token() == Token.IDENTIFIER) {
-            name = this.exprParser.name();
+            this.exprParser.name();
+            throw new ParserException("TODO");
         }
 
         if (lexer.token() == Token.PRIMARY) {
@@ -43,10 +42,6 @@ public class SQLDDLParser extends SQLStatementParser {
             accept(Token.KEY);
 
             throw new ParserException("TODO");
-        }
-
-        if (name != null) {
-
         }
 
         throw new ParserException("TODO");

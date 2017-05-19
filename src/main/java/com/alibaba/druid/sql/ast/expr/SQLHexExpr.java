@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,7 @@ import com.alibaba.druid.util.HexBin;
 
 public class SQLHexExpr extends SQLExprImpl implements SQLLiteralExpr {
 
-    private static final long serialVersionUID = 1L;
-
-    private final String      hex;
+    private final String hex;
 
     public SQLHexExpr(String hex){
         this.hex = hex;
@@ -78,7 +76,7 @@ public class SQLHexExpr extends SQLExprImpl implements SQLLiteralExpr {
         }
         return true;
     }
-    
+
     public byte[] toBytes() {
         return HexBin.decode(this.hex);
     }

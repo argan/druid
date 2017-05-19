@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.bvt.bug;
 
 import java.sql.Connection;
@@ -6,7 +21,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Properties;
 
-import junit.framework.Assert;
+import org.junit.Assert;
 import junit.framework.TestCase;
 
 import com.alibaba.druid.mock.MockConnection;
@@ -21,8 +36,11 @@ public class Bug_for_happyday517_2 extends TestCase {
     private MockDriver      driver;
 
     final DataTruncation    exception = new java.sql.DataTruncation(0, true, true, 0, 0);
+    
+    private int originalDataSourceCount = 0;
 
     protected void setUp() throws Exception {
+        originalDataSourceCount = DruidDataSourceStatManager.getInstance().getDataSourceList().size();
 
         final MockPreparedStatement mockStatement = new MockPreparedStatement(null, null) {
 
@@ -52,7 +70,7 @@ public class Bug_for_happyday517_2 extends TestCase {
 
     protected void tearDown() throws Exception {
         dataSource.close();
-        Assert.assertEquals(0, DruidDataSourceStatManager.getInstance().getDataSourceList().size());
+        Assert.assertEquals(originalDataSourceCount, DruidDataSourceStatManager.getInstance().getDataSourceList().size());
     }
 
     public void test_bug() throws Exception {

@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,14 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class OracleDbLinkExpr extends SQLExprImpl implements SQLName, OracleExpr {
 
-    private static final long serialVersionUID = 1L;
-    private SQLExpr           expr;
-    private String            dbLink;
+    private SQLExpr expr;
+    private String  dbLink;
 
     public OracleDbLinkExpr(){
 
     }
-    
-    public String getSimleName() {
+
+    public String getSimpleName() {
         return dbLink;
     }
 

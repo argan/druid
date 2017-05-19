@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,7 @@
 package com.alibaba.druid.sql.dialect.mysql.parser;
 
 import static com.alibaba.druid.sql.parser.CharTypes.isFirstIdentifierChar;
-import static com.alibaba.druid.sql.parser.CharTypes.isIdentifierChar;
 import static com.alibaba.druid.sql.parser.LayoutCharacters.EOI;
-import static com.alibaba.druid.sql.parser.Token.LITERAL_CHARS;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,7 +24,7 @@ import java.util.Map;
 import com.alibaba.druid.sql.parser.Keywords;
 import com.alibaba.druid.sql.parser.Lexer;
 import com.alibaba.druid.sql.parser.NotAllowCommentException;
-import com.alibaba.druid.sql.parser.SQLParseException;
+import com.alibaba.druid.sql.parser.ParserException;
 import com.alibaba.druid.sql.parser.Token;
 
 public class MySqlLexer extends Lexer {
@@ -35,83 +33,34 @@ public class MySqlLexer extends Lexer {
 
     static {
         Map<String, Token> map = new HashMap<String, Token>();
-        map.put("EXISTS", Token.EXISTS);
-        map.put("THEN", Token.THEN);
-        map.put("AS", Token.AS);
-        map.put("GROUP", Token.GROUP);
-        map.put("BY", Token.BY);
-        map.put("HAVING", Token.HAVING);
-        map.put("DELETE", Token.DELETE);
-        map.put("ORDER", Token.ORDER);
-        map.put("INDEX", Token.INDEX);
-        map.put("FOR", Token.FOR);
-        map.put("SCHEMA", Token.SCHEMA);
-        map.put("FOREIGN", Token.FOREIGN);
-        map.put("REFERENCES", Token.REFERENCES);
-        map.put("CHECK", Token.CHECK);
-        map.put("PRIMARY", Token.PRIMARY);
-        map.put("KEY", Token.KEY);
-        map.put("CONSTRAINT", Token.CONSTRAINT);
-        map.put("DEFAULT", Token.DEFAULT);
-        map.put("VIEW", Token.VIEW);
-        map.put("CREATE", Token.CREATE);
-        map.put("VALUES", Token.VALUES);
-        map.put("ALTER", Token.ALTER);
-        map.put("TABLE", Token.TABLE);
-        map.put("DROP", Token.DROP);
-        map.put("SET", Token.SET);
-        map.put("INTO", Token.INTO);
-        map.put("UPDATE", Token.UPDATE);
-        map.put("NULL", Token.NULL);
-        map.put("IS", Token.IS);
-        map.put("NOT", Token.NOT);
-        map.put("SELECT", Token.SELECT);
-        map.put("INSERT", Token.INSERT);
-        map.put("FROM", Token.FROM);
-        map.put("WHERE", Token.WHERE);
-        map.put("AND", Token.AND);
-        map.put("OR", Token.OR);
-        map.put("XOR", Token.XOR);
-        map.put("DISTINCT", Token.DISTINCT);
-        map.put("UNIQUE", Token.UNIQUE);
-        map.put("ALL", Token.ALL);
-        map.put("UNION", Token.UNION);
-        map.put("INTERSECT", Token.INTERSECT);
-        map.put("MINUS", Token.MINUS);
-        map.put("INNER", Token.INNER);
-        map.put("LEFT", Token.LEFT);
-        map.put("RIGHT", Token.RIGHT);
-        map.put("FULL", Token.FULL);
-        map.put("ON", Token.ON);
-        map.put("OUTER", Token.OUTER);
-        map.put("JOIN", Token.JOIN);
-        map.put("NEW", Token.NEW);
-        map.put("CASE", Token.CASE);
-        map.put("WHEN", Token.WHEN);
-        map.put("END", Token.END);
-        map.put("WHEN", Token.WHEN);
-        map.put("ELSE", Token.ELSE);
-        map.put("EXISTS", Token.EXISTS);
-        map.put("CAST", Token.CAST);
-        map.put("IN", Token.IN);
-        map.put("ASC", Token.ASC);
-        map.put("DESC", Token.DESC);
-        map.put("LIKE", Token.LIKE);
-        map.put("ESCAPE", Token.ESCAPE);
-        map.put("BETWEEN", Token.BETWEEN);
-        map.put("INTERVAL", Token.INTERVAL);
-        map.put("LOCK", Token.LOCK);
-        map.put("SOME", Token.SOME);
-        map.put("ANY", Token.ANY);
-        map.put("TRUNCATE", Token.TRUNCATE);
-        map.put("IF", Token.IF);
 
-        map.put("TRUE", Token.TRUE);
-        map.put("FALSE", Token.FALSE);
-        map.put("LIMIT", Token.LIMIT);
-        map.put("KILL", Token.KILL);
-        map.put("IDENTIFIED", Token.IDENTIFIED);
+        map.putAll(Keywords.DEFAULT_KEYWORDS.getKeywords());
+
         map.put("DUAL", Token.DUAL);
+        map.put("FALSE", Token.FALSE);
+        map.put("IDENTIFIED", Token.IDENTIFIED);
+        map.put("IF", Token.IF);
+        map.put("KILL", Token.KILL);
+
+        map.put("LIMIT", Token.LIMIT);
+        map.put("TRUE", Token.TRUE);
+        map.put("BINARY", Token.BINARY);
+        map.put("SHOW", Token.SHOW);
+        map.put("CACHE", Token.CACHE);
+        map.put("ANALYZE", Token.ANALYZE);
+        map.put("OPTIMIZE", Token.OPTIMIZE);
+        map.put("ROW", Token.ROW);
+        map.put("BEGIN", Token.BEGIN);
+        map.put("END", Token.END);
+        map.put("DIV", Token.DIV);
+        
+        // for oceanbase & mysql 5.7
+        map.put("PARTITION", Token.PARTITION);
+        
+        map.put("CONTINUE", Token.CONTINUE);
+        map.put("UNDO", Token.UNDO);
+        map.put("SQLSTATE", Token.SQLSTATE);
+        map.put("CONDITION", Token.CONDITION);
 
         DEFAULT_MYSQL_KEYWORDS = new Keywords(map);
     }
@@ -126,68 +75,144 @@ public class MySqlLexer extends Lexer {
         super.keywods = DEFAULT_MYSQL_KEYWORDS;
     }
 
+    public MySqlLexer(String input, boolean skipComment, boolean keepComments){
+        super(input, skipComment);
+        this.skipComment = skipComment;
+        this.keepComments = keepComments;
+        super.keywods = DEFAULT_MYSQL_KEYWORDS;
+    }
+
+    public void scanSharp() {
+        if (ch != '#') {
+            throw new ParserException("illegal stat");
+        }
+
+        if (charAt(pos + 1) == '{') {
+            scanVariable();
+            return;
+        }
+
+        Token lastToken = this.token;
+
+        scanChar();
+        mark = pos;
+        bufPos = 0;
+        for (;;) {
+            if (ch == '\r') {
+                if (charAt(pos + 1) == '\n') {
+                    bufPos += 2;
+                    scanChar();
+                    break;
+                }
+                bufPos++;
+                break;
+            } else if (ch == EOI) {
+                break;
+            }
+
+            if (ch == '\n') {
+                scanChar();
+                bufPos++;
+                break;
+            }
+
+            scanChar();
+            bufPos++;
+        }
+
+        stringVal = subString(mark - 1, bufPos + 1);
+        token = Token.LINE_COMMENT;
+        commentCount++;
+        if (keepComments) {
+            addComment(stringVal);
+        }
+
+        if (commentHandler != null && commentHandler.handle(lastToken, stringVal)) {
+            return;
+        }
+        
+        endOfComment = isEOF();
+
+        if (!isAllowComment() && (isEOF() || !isSafeComment(stringVal))) {
+            throw new NotAllowCommentException();
+        }
+    }
+
     public void scanVariable() {
-        final char first = ch;
-
-        if (ch != '@' && ch != ':' && ch != '#') {
-            throw new SQLParseException("illegal variable");
+        if (ch != '@' && ch != ':' && ch != '#' && ch != '$') {
+            throw new ParserException("illegal variable");
         }
 
-        int hash = first;
+        mark = pos;
+        bufPos = 1;
 
-        np = bp;
-        sp = 1;
-
-        if (buf[bp + 1] == '@') {
-            ch = buf[++bp];
-            hash = 31 * hash + ch;
-
-            sp++;
+        if (charAt(pos + 1) == '@') {
+            ch = charAt(++pos);
+            bufPos++;
         }
 
-        if (buf[bp + 1] == '`') {
-            ++bp;
-            ++sp;
+        if (charAt(pos + 1) == '`') {
+            ++pos;
+            ++bufPos;
             char ch;
             for (;;) {
-                ch = buf[++bp];
+                ch = charAt(++pos);
 
                 if (ch == '`') {
-                    sp++;
-                    ch = buf[++bp];
+                    bufPos++;
+                    ch = charAt(++pos);
                     break;
                 } else if (ch == EOI) {
-                    throw new SQLParseException("illegal identifier");
+                    throw new ParserException("illegal identifier");
                 }
 
-                hash = 31 * hash + ch;
-
-                sp++;
+                bufPos++;
                 continue;
             }
 
-            this.ch = buf[bp];
+            this.ch = charAt(pos);
 
-            stringVal = symbolTable.addSymbol(buf, np, sp, hash);
+            stringVal = subString(mark, bufPos);
+            token = Token.VARIANT;
+        } else if (charAt(pos + 1) == '{') {
+            ++pos;
+            ++bufPos;
+            char ch;
+            for (;;) {
+                ch = charAt(++pos);
+
+                if (ch == '}') {
+                    bufPos++;
+                    ch = charAt(++pos);
+                    break;
+                } else if (ch == EOI) {
+                    throw new ParserException("illegal identifier");
+                }
+
+                bufPos++;
+                continue;
+            }
+
+            this.ch = charAt(pos);
+
+            stringVal = subString(mark, bufPos);
             token = Token.VARIANT;
         } else {
             for (;;) {
-                ch = buf[++bp];
+                ch = charAt(++pos);
 
                 if (!isIdentifierChar(ch)) {
                     break;
                 }
 
-                hash = 31 * hash + ch;
-
-                sp++;
+                bufPos++;
                 continue;
             }
         }
 
-        this.ch = buf[bp];
+        this.ch = charAt(pos);
 
-        stringVal = symbolTable.addSymbol(buf, np, sp, hash);
+        stringVal = subString(mark, bufPos);
         token = Token.VARIANT;
     }
 
@@ -195,31 +220,28 @@ public class MySqlLexer extends Lexer {
         final char first = ch;
 
         if (ch == '`') {
-            int hash = first;
 
-            np = bp;
-            sp = 1;
+            mark = pos;
+            bufPos = 1;
             char ch;
             for (;;) {
-                ch = buf[++bp];
+                ch = charAt(++pos);
 
                 if (ch == '`') {
-                    sp++;
-                    ch = buf[++bp];
+                    bufPos++;
+                    ch = charAt(++pos);
                     break;
                 } else if (ch == EOI) {
-                    throw new SQLParseException("illegal identifier");
+                    throw new ParserException("illegal identifier");
                 }
 
-                hash = 31 * hash + ch;
-
-                sp++;
+                bufPos++;
                 continue;
             }
 
-            this.ch = buf[bp];
+            this.ch = charAt(pos);
 
-            stringVal = symbolTable.addSymbol(buf, np, sp, hash);
+            stringVal = subString(mark, bufPos);
             Token tok = keywods.getKeyword(stringVal);
             if (tok != null) {
                 token = tok;
@@ -230,30 +252,43 @@ public class MySqlLexer extends Lexer {
 
             final boolean firstFlag = isFirstIdentifierChar(first);
             if (!firstFlag) {
-                throw new SQLParseException("illegal identifier");
+                throw new ParserException("illegal identifier");
             }
 
-            int hash = first;
-
-            np = bp;
-            sp = 1;
-            char ch;
+            mark = pos;
+            bufPos = 1;
+            char ch = '\0', last_ch;
             for (;;) {
-                ch = buf[++bp];
+                last_ch = ch;
+                ch = charAt(++pos);
 
                 if (!isIdentifierChar(ch)) {
+                    if (ch == '-' && pos < text.length() - 1) {
+                        if (mark > 0 && text.charAt(mark - 1) == '.') {
+                            break;
+                        }
+
+                        char next_char = text.charAt(pos + 1);
+                        if (isIdentifierChar(next_char)) {
+                            bufPos++;
+                            continue;
+                        }
+                    }
+                    if (last_ch == '-' && charAt(pos-2) != '-') {
+                        ch = last_ch;
+                        bufPos--;
+                        pos--;
+                    }
                     break;
                 }
 
-                hash = 31 * hash + ch;
-
-                sp++;
+                bufPos++;
                 continue;
             }
 
-            this.ch = buf[bp];
+            this.ch = charAt(pos);
 
-            stringVal = symbolTable.addSymbol(buf, np, sp, hash);
+            stringVal = addSymbol();
             Token tok = keywods.getKeyword(stringVal);
             if (tok != null) {
                 token = tok;
@@ -263,162 +298,100 @@ public class MySqlLexer extends Lexer {
         }
     }
 
-    protected void scanString() {
-        np = bp;
-        boolean hasSpecial = false;
+    protected final void scanString() {
+        scanString2();
+    }
 
-        for (;;) {
-            if (bp >= buflen) {
-                lexError(tokenPos, "unclosed.str.lit");
+    public void scanComment() {
+        Token lastToken = this.token;
+        
+        if (ch == '-') {
+            char next_2 = charAt(pos + 2);
+            if (isDigit(next_2)) {
+                scanChar();
+                token = Token.SUB;
                 return;
             }
-
-            ch = buf[++bp];
-
-            if (ch == '\\') {
-                scanChar();
-                if (!hasSpecial) {
-                    System.arraycopy(buf, np + 1, sbuf, 0, sp);
-                    hasSpecial = true;
-                }
-
-                switch (ch) {
-                    case '\0':
-                        putChar('\0');
-                        break;
-                    case '\'':
-                        putChar('\'');
-                        break;
-                    case '"':
-                        putChar('"');
-                        break;
-                    case 'b':
-                        putChar('\b');
-                        break;
-                    case 'n':
-                        putChar('\n');
-                        break;
-                    case 'r':
-                        putChar('\r');
-                        break;
-                    case 't':
-                        putChar('\t');
-                        break;
-                    case '\\':
-                        putChar('\\');
-                        break;
-                    case 'Z':
-                        putChar((char) 0x1A); // ctrl + Z
-                        break;
-                    default:
-                        putChar(ch);
-                        break;
-                }
-                scanChar();
-            }
-
-            if (ch == '\'') {
-                scanChar();
-                if (ch != '\'') {
-                    token = LITERAL_CHARS;
-                    break;
-                } else {
-                    System.arraycopy(buf, np + 1, sbuf, 0, sp);
-                    hasSpecial = true;
-                    putChar('\'');
-                    continue;
-                }
-            }
-
-            if (!hasSpecial) {
-                sp++;
-                continue;
-            }
-
-            if (sp == sbuf.length) {
-                putChar(ch);
-            } else {
-                sbuf[sp++] = ch;
-            }
-        }
-
-        if (!hasSpecial) {
-            stringVal = new String(buf, np + 1, sp);
-        } else {
-            stringVal = new String(sbuf, 0, sp);
-        }
-    }
-    
-    public void scanComment() {
-        if (ch != '/' && ch != '-') {
+        } else if (ch != '/') {
             throw new IllegalStateException();
         }
 
-        np = bp;
-        sp = 0;
+        mark = pos;
+        bufPos = 0;
         scanChar();
 
         // /*+ */
         if (ch == '*') {
             scanChar();
-            sp++;
+            bufPos++;
 
             while (ch == ' ') {
                 scanChar();
-                sp++;
+                bufPos++;
             }
 
             boolean isHint = false;
-            int startHintSp = sp + 1;
-            if (ch == '!') {
+            int startHintSp = bufPos + 1;
+            if (ch == '!' //
+                    || ch == '+' // oceanbase hints
+                    ) {
                 isHint = true;
                 scanChar();
-                sp++;
+                bufPos++;
             }
 
             for (;;) {
-                if (ch == '*' && buf[bp + 1] == '/') {
-                    sp += 2;
+                if (ch == EOI) {
+                    this.token = Token.ERROR;
+                    return;
+                }
+                if (ch == '*' && charAt(pos + 1) == '/') {
+                    bufPos += 3;
                     scanChar();
                     scanChar();
                     break;
                 }
 
                 scanChar();
-                sp++;
+                bufPos++;
             }
 
             if (isHint) {
-                stringVal = new String(buf, np + startHintSp, (sp - startHintSp) - 1);
+                stringVal = subString(mark + startHintSp, (bufPos - startHintSp) - 2);
                 token = Token.HINT;
             } else {
-                stringVal = new String(buf, np, sp);
+                stringVal = subString(mark, bufPos);
                 token = Token.MULTI_LINE_COMMENT;
+                commentCount++;
+                if (keepComments) {
+                    addComment(stringVal);
+                }
             }
+
+            endOfComment = isEOF();
             
-            if (token != Token.HINT && !isAllowComment()) {
+            if (commentHandler != null && commentHandler.handle(lastToken, stringVal)) {
+                return;
+            }
+
+            if (!isHint && !isAllowComment() && !isSafeComment(stringVal)) {
                 throw new NotAllowCommentException();
             }
 
             return;
         }
-        
-        if (!isAllowComment()) {
-            throw new NotAllowCommentException();
-        }
-
         if (ch == '/' || ch == '-') {
             scanChar();
-            sp++;
+            bufPos++;
 
             for (;;) {
                 if (ch == '\r') {
-                    if (buf[bp + 1] == '\n') {
-                        sp += 2;
+                    if (charAt(pos + 1) == '\n') {
+                        bufPos += 2;
                         scanChar();
                         break;
                     }
-                    sp++;
+                    bufPos++;
                     break;
                 } else if (ch == EOI) {
                     break;
@@ -426,17 +399,138 @@ public class MySqlLexer extends Lexer {
 
                 if (ch == '\n') {
                     scanChar();
-                    sp++;
+                    bufPos++;
                     break;
                 }
 
                 scanChar();
-                sp++;
+                bufPos++;
             }
 
-            stringVal = new String(buf, np + 1, sp);
+            stringVal = subString(mark, bufPos + 1);
             token = Token.LINE_COMMENT;
+            commentCount++;
+            if (keepComments) {
+                addComment(stringVal);
+            }
+
+            if (commentHandler != null && commentHandler.handle(lastToken, stringVal)) {
+                return;
+            }
+
+            endOfComment = isEOF();
+            
+            if (!isAllowComment() && (isEOF() || !isSafeComment(stringVal))) {
+                throw new NotAllowCommentException();
+            }
+
             return;
+        }
+    }
+    
+    private final static boolean[] identifierFlags = new boolean[256];
+    static {
+        for (char c = 0; c < identifierFlags.length; ++c) {
+            if (c >= 'A' && c <= 'Z') {
+                identifierFlags[c] = true;
+            } else if (c >= 'a' && c <= 'z') {
+                identifierFlags[c] = true;
+            } else if (c >= '0' && c <= '9') {
+                identifierFlags[c] = true;
+            }
+        }
+        // identifierFlags['`'] = true;
+        identifierFlags['_'] = true;
+        //identifierFlags['-'] = true; // mysql
+    }
+
+    public static boolean isIdentifierChar(char c) {
+        if (c <= identifierFlags.length) {
+            return identifierFlags[c];
+        }
+        return c != '　' && c != '，';
+    }
+
+    public void scanNumber() {
+        mark = pos;
+
+        if (ch == '-') {
+            bufPos++;
+            ch = charAt(++pos);
+        }
+
+        for (;;) {
+            if (ch >= '0' && ch <= '9') {
+                bufPos++;
+            } else {
+                break;
+            }
+            ch = charAt(++pos);
+        }
+
+        boolean isDouble = false;
+
+        if (ch == '.') {
+            if (charAt(pos + 1) == '.') {
+                token = Token.LITERAL_INT;
+                return;
+            }
+            bufPos++;
+            ch = charAt(++pos);
+            isDouble = true;
+
+            for (;;) {
+                if (ch >= '0' && ch <= '9') {
+                    bufPos++;
+                } else {
+                    break;
+                }
+                ch = charAt(++pos);
+            }
+        }
+
+        if (ch == 'e' || ch == 'E') {
+            bufPos++;
+            ch = charAt(++pos);
+
+            if (ch == '+' || ch == '-') {
+                bufPos++;
+                ch = charAt(++pos);
+            }
+
+            for (;;) {
+                if (ch >= '0' && ch <= '9') {
+                    bufPos++;
+                } else {
+                    break;
+                }
+                ch = charAt(++pos);
+            }
+
+            isDouble = true;
+        }
+
+        if (isDouble) {
+            token = Token.LITERAL_FLOAT;
+        } else {
+            if (isFirstIdentifierChar(ch) && !(ch == 'b' && bufPos == 1 && charAt(pos - 1) == '0')) {
+                bufPos++;
+                for (;;) {
+                    ch = charAt(++pos);
+
+                    if (!isIdentifierChar(ch)) {
+                        break;
+                    }
+
+                    bufPos++;
+                    continue;
+                }
+
+                stringVal = addSymbol();
+                token = Token.IDENTIFIER;
+            } else {
+                token = Token.LITERAL_INT;
+            }
         }
     }
 }

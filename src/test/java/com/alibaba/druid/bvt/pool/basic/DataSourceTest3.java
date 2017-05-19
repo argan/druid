@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.bvt.pool.basic;
 
 import java.sql.SQLException;
@@ -6,8 +21,9 @@ import java.util.Properties;
 
 import javax.security.auth.callback.PasswordCallback;
 
-import junit.framework.Assert;
 import junit.framework.TestCase;
+
+import org.junit.Assert;
 
 import com.alibaba.druid.mock.MockDriver;
 import com.alibaba.druid.pool.DruidDataSource;
@@ -24,7 +40,7 @@ public class DataSourceTest3 extends TestCase {
     private DruidDataSource dataSource;
 
     protected void setUp() throws Exception {
-        Assert.assertEquals(0, DruidDataSourceStatManager.getInstance().getDataSourceList().size());
+        DruidDataSourceStatManager.clear();
 
         driver = new MockDriver();
 
@@ -33,7 +49,6 @@ public class DataSourceTest3 extends TestCase {
         dataSource.setDriver(driver);
         dataSource.setInitialSize(1);
         dataSource.setMaxActive(2);
-        dataSource.setMaxIdle(2);
         dataSource.setMinIdle(1);
         dataSource.setMinEvictableIdleTimeMillis(300 * 1000); // 300 / 10
         dataSource.setTimeBetweenEvictionRunsMillis(180 * 1000); // 180 / 10
@@ -41,7 +56,7 @@ public class DataSourceTest3 extends TestCase {
         dataSource.setTestOnBorrow(true);
         dataSource.setTestOnReturn(true);
         dataSource.setValidationQuery("SELECT 1");
-        dataSource.setFilters("stat,trace");
+        dataSource.setFilters("stat");
 
         JdbcStatContext context = new JdbcStatContext();
         context.setTraceEnable(true);
@@ -79,52 +94,27 @@ public class DataSourceTest3 extends TestCase {
         dataSource.setPoolPreparedStatements(false);
     }
 
-    public void test_error_2() throws Exception {
+    public void test_change_maxWait() throws Exception {
+        DruidPooledConnection conn = dataSource.getConnection().unwrap(DruidPooledConnection.class);
+        conn.close();
+        dataSource.setMaxWait(1);
+    }
+
+    public void test_change_minIdle() throws Exception {
         DruidPooledConnection conn = dataSource.getConnection().unwrap(DruidPooledConnection.class);
 
         conn.close();
 
-        {
-            Exception error = null;
-            try {
-                dataSource.setMaxWait(1);
-            } catch (Exception ex) {
-                error = ex;
-            }
-            Assert.assertNotNull(error);
-        }
+        dataSource.setMinIdle(1);
     }
 
-    public void test_error_3() throws Exception {
-        DruidPooledConnection conn = dataSource.getConnection().unwrap(DruidPooledConnection.class);
-
-        conn.close();
-
-        {
-            Exception error = null;
-            try {
-                dataSource.setMinIdle(1);
-            } catch (Exception ex) {
-                error = ex;
-            }
-            Assert.assertNotNull(error);
-        }
-    }
-
+    @SuppressWarnings("deprecation")
     public void test_error_4() throws Exception {
         DruidPooledConnection conn = dataSource.getConnection().unwrap(DruidPooledConnection.class);
 
         conn.close();
 
-        {
-            Exception error = null;
-            try {
-                dataSource.setMaxIdle(1);
-            } catch (Exception ex) {
-                error = ex;
-            }
-            Assert.assertNotNull(error);
-        }
+        dataSource.setMaxIdle(1);
     }
 
     public void test_error_5() throws Exception {
@@ -132,10 +122,12 @@ public class DataSourceTest3 extends TestCase {
 
         conn.close();
 
+        dataSource.setInitialSize(dataSource.getInitialSize());
+
         {
             Exception error = null;
             try {
-                dataSource.setInitialSize(1);
+                dataSource.setInitialSize(10);
             } catch (Exception ex) {
                 error = ex;
             }
@@ -148,15 +140,7 @@ public class DataSourceTest3 extends TestCase {
 
         conn.close();
 
-        {
-            Exception error = null;
-            try {
-                dataSource.setMaxActive(1);
-            } catch (Exception ex) {
-                error = ex;
-            }
-            Assert.assertNotNull(error);
-        }
+        dataSource.setMaxActive(1);
     }
 
     public void test_error_7() throws Exception {
@@ -164,47 +148,24 @@ public class DataSourceTest3 extends TestCase {
 
         conn.close();
 
-        {
-            Exception error = null;
-            try {
-                dataSource.setPassword("xx");
-            } catch (Exception ex) {
-                error = ex;
-            }
-            Assert.assertNotNull(error);
-        }
+        dataSource.setPassword(dataSource.getPassword());
+        dataSource.setPassword("xx");
     }
 
-    public void test_error_8() throws Exception {
+    public void test_change_connectProperties() throws Exception {
         DruidPooledConnection conn = dataSource.getConnection().unwrap(DruidPooledConnection.class);
 
         conn.close();
 
-        {
-            Exception error = null;
-            try {
-                dataSource.setConnectProperties(new Properties());
-            } catch (Exception ex) {
-                error = ex;
-            }
-            Assert.assertNotNull(error);
-        }
+        dataSource.setConnectProperties(new Properties());
     }
 
-    public void test_error_9() throws Exception {
+    public void test_change_connectProperties_2() throws Exception {
         DruidPooledConnection conn = dataSource.getConnection().unwrap(DruidPooledConnection.class);
 
         conn.close();
 
-        {
-            Exception error = null;
-            try {
-                dataSource.setConnectionProperties("x=12;;");
-            } catch (Exception ex) {
-                error = ex;
-            }
-            Assert.assertNotNull(error);
-        }
+        dataSource.setConnectionProperties("x=12;;");
     }
 
     public void test_getValidConnectionCheckerClassName() throws Exception {
@@ -363,8 +324,9 @@ public class DataSourceTest3 extends TestCase {
     public void test_error_validateConnection_3() throws Exception {
         dataSource.setValidationQuery(null);
         dataSource.setValidConnectionChecker(new MySqlValidConnectionChecker());
-        DruidPooledConnection conn = dataSource.getConnection().unwrap(DruidPooledConnection.class);
 
+        DruidPooledConnection conn = dataSource.getConnection().unwrap(DruidPooledConnection.class);
         dataSource.validateConnection(conn);
+
     }
 }

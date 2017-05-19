@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,14 @@
 package com.alibaba.druid.proxy;
 
 import java.lang.management.ManagementFactory;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -36,39 +36,38 @@ import javax.management.ObjectName;
 
 import com.alibaba.druid.VERSION;
 import com.alibaba.druid.filter.Filter;
-import com.alibaba.druid.proxy.config.AbstractDruidFilterConfig;
-import com.alibaba.druid.proxy.config.DruidFilterConfigLoader;
+import com.alibaba.druid.filter.FilterManager;
 import com.alibaba.druid.proxy.jdbc.DataSourceProxy;
 import com.alibaba.druid.proxy.jdbc.DataSourceProxyConfig;
 import com.alibaba.druid.proxy.jdbc.DataSourceProxyImpl;
 import com.alibaba.druid.stat.JdbcStatManager;
 import com.alibaba.druid.support.logging.Log;
 import com.alibaba.druid.support.logging.LogFactory;
-import com.alibaba.druid.util.DruidLoaderUtils;
+import com.alibaba.druid.util.Utils;
 import com.alibaba.druid.util.JMXUtils;
 import com.alibaba.druid.util.JdbcUtils;
 
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public class DruidDriver implements Driver, DruidDriverMBean {
 
-    private final static Log                                        LOG                      = LogFactory.getLog(DruidDriver.class);
+    private static Log                                              LOG; // lazy init
 
     private final static DruidDriver                                instance                 = new DruidDriver();
 
-    private final static ConcurrentMap<String, DataSourceProxyImpl> proxyDataSources         = new ConcurrentHashMap<String, DataSourceProxyImpl>();
+    private final static ConcurrentMap<String, DataSourceProxyImpl> proxyDataSources         = new ConcurrentHashMap<String, DataSourceProxyImpl>(16, 0.75f, 1);
     private final static AtomicInteger                              dataSourceIdSeed         = new AtomicInteger(0);
+    private final static AtomicInteger                              sqlStatIdSeed            = new AtomicInteger(0);
 
     public final static String                                      DEFAULT_PREFIX           = "jdbc:wrap-jdbc:";
-    public final static String                                      CONFIG_PREFIX            = "druid.config";
     public final static String                                      DRIVER_PREFIX            = "driver=";
     public final static String                                      PASSWORD_CALLBACK_PREFIX = "passwordCallback=";
     public final static String                                      NAME_PREFIX              = "name=";
     public final static String                                      JMX_PREFIX               = "jmx=";
     public final static String                                      FILTERS_PREFIX           = "filters=";
 
-    private final AtomicLong                                        connectCount           = new AtomicLong(0);
+    private final AtomicLong                                        connectCount             = new AtomicLong(0);
 
     private String                                                  acceptPrefix             = DEFAULT_PREFIX;
 
@@ -79,7 +78,13 @@ public class DruidDriver implements Driver, DruidDriverMBean {
     private final static String                                     MBEAN_NAME               = "com.alibaba.druid:type=DruidDriver";
 
     static {
-        registerDriver(instance);
+        AccessController.doPrivileged(new PrivilegedAction<Object>() {
+            @Override
+            public Object run() {
+                registerDriver(instance);
+                return null;
+            }
+        });
     }
 
     public static boolean registerDriver(Driver driver) {
@@ -88,17 +93,24 @@ public class DruidDriver implements Driver, DruidDriverMBean {
 
             try {
                 MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
-                
+
                 ObjectName objectName = new ObjectName(MBEAN_NAME);
                 if (!mbeanServer.isRegistered(objectName)) {
                     mbeanServer.registerMBean(instance, objectName);
                 }
-            } catch (Exception ex) {
-                LOG.error("register druid-driver mbean error", ex);
+            } catch (Throwable ex) {
+                if (LOG == null) {
+                    LOG = LogFactory.getLog(DruidDriver.class);
+                }
+                LOG.warn("register druid-driver mbean error", ex);
             }
 
             return true;
         } catch (Exception e) {
+            if (LOG == null) {
+                LOG = LogFactory.getLog(DruidDriver.class);
+            }
+            
             LOG.error("registerDriver error", e);
         }
 
@@ -115,6 +127,10 @@ public class DruidDriver implements Driver, DruidDriverMBean {
 
     public static int createDataSourceId() {
         return dataSourceIdSeed.incrementAndGet();
+    }
+
+    public static int createSqlStatId() {
+        return sqlStatIdSeed.incrementAndGet();
     }
 
     @Override
@@ -160,12 +176,12 @@ public class DruidDriver implements Driver, DruidDriverMBean {
             Driver rawDriver = createDriver(config.getRawDriverClassName());
 
             DataSourceProxyImpl newDataSource = new DataSourceProxyImpl(rawDriver, config);
-            
+
             {
                 String property = System.getProperty("druid.filters");
                 if (property != null && property.length() > 0) {
                     for (String filterItem : property.split(",")) {
-                        DruidLoaderUtils.loadFilter(config.getFilters(), filterItem);
+                        FilterManager.loadFilter(config.getFilters(), filterItem);
                     }
                 }
             }
@@ -178,7 +194,7 @@ public class DruidDriver implements Driver, DruidDriverMBean {
                 }
             }
 
-            DataSourceProxy oldDataSource = proxyDataSources.putIfAbsent(url, newDataSource); 
+            DataSourceProxy oldDataSource = proxyDataSources.putIfAbsent(url, newDataSource);
             if (oldDataSource == null) {
                 if (config.isJmxOption()) {
                     JMXUtils.register("com.alibaba.druid:type=JdbcStat", JdbcStatManager.getInstance());
@@ -195,15 +211,6 @@ public class DruidDriver implements Driver, DruidDriverMBean {
 
         DataSourceProxyConfig config = new DataSourceProxyConfig();
 
-        List<AbstractDruidFilterConfig> druidFilterConfigList = new ArrayList<AbstractDruidFilterConfig>();
-
-        if (info != null) {
-            String configFile = info.getProperty(CONFIG_PREFIX);
-            if (configFile != null) {
-                DruidFilterConfigLoader.loadConfig(configFile.trim(), druidFilterConfigList);
-            }
-        }
-
         if (restUrl.startsWith(DRIVER_PREFIX)) {
             int pos = restUrl.indexOf(':', DRIVER_PREFIX.length());
             String driverText = restUrl.substring(DRIVER_PREFIX.length(), pos);
@@ -217,13 +224,9 @@ public class DruidDriver implements Driver, DruidDriverMBean {
             int pos = restUrl.indexOf(':', FILTERS_PREFIX.length());
             String filtersText = restUrl.substring(FILTERS_PREFIX.length(), pos);
             for (String filterItem : filtersText.split(",")) {
-                DruidLoaderUtils.loadFilter(config.getFilters(), filterItem);
+                FilterManager.loadFilter(config.getFilters(), filterItem);
             }
             restUrl = restUrl.substring(pos + 1);
-        }
-        // 如果url中并无定义filter 采用配置
-        if (config.getFilters().size() <= 0) {
-            DruidLoaderUtils.loadFilter(config.getFilters(), druidFilterConfigList);
         }
 
         if (restUrl.startsWith(NAME_PREFIX)) {
@@ -253,7 +256,7 @@ public class DruidDriver implements Driver, DruidDriverMBean {
     }
 
     public Driver createDriver(String className) throws SQLException {
-        Class<?> rawDriverClass = DruidLoaderUtils.loadClass(className);
+        Class<?> rawDriverClass = Utils.loadClass(className);
 
         if (rawDriverClass == null) {
             throw new SQLException("jdbc-driver's class not found. '" + className + "'");
@@ -263,9 +266,9 @@ public class DruidDriver implements Driver, DruidDriverMBean {
         try {
             rawDriver = (Driver) rawDriverClass.newInstance();
         } catch (InstantiationException e) {
-            throw new SQLException("create driver instance error, driver className '" + className + "'");
+            throw new SQLException("create driver instance error, driver className '" + className + "'", e);
         } catch (IllegalAccessException e) {
-            throw new SQLException("create driver instance error, driver className '" + className + "'");
+            throw new SQLException("create driver instance error, driver className '" + className + "'", e);
         }
 
         return rawDriver;
@@ -318,7 +321,7 @@ public class DruidDriver implements Driver, DruidDriverMBean {
     public void resetStat() {
         connectCount.set(0);
     }
-    
+
     @Override
     public String getDruidVersion() {
         return VERSION.getVersionNumber();

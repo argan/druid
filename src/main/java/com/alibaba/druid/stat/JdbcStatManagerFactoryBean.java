@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ package com.alibaba.druid.stat;
 
 import org.springframework.beans.factory.FactoryBean;
 
-public class JdbcStatManagerFactoryBean implements FactoryBean {
+public class JdbcStatManagerFactoryBean implements FactoryBean<JdbcStatManager> {
 
     @Override
-    public Object getObject() throws Exception {
+    public JdbcStatManager getObject() throws Exception {
         return JdbcStatManager.getInstance();
     }
 

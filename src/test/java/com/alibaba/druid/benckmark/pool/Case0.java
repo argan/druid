@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 package com.alibaba.druid.benckmark.pool;
 
 import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.NumberFormat;
@@ -26,10 +25,12 @@ import javax.sql.DataSource;
 import junit.framework.TestCase;
 
 import org.apache.commons.dbcp.BasicDataSource;
+import org.logicalcobwebs.proxool.ProxoolDataSource;
 
 import com.alibaba.druid.TestUtil;
 import com.alibaba.druid.pool.DruidDataSource;
 import com.jolbox.bonecp.BoneCPDataSource;
+import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 public class Case0 extends TestCase {
 
@@ -37,7 +38,7 @@ public class Case0 extends TestCase {
     private String   user;
     private String   password;
     private String   driverClass;
-    private int      initialSize                = 10;
+    private int      initialSize                = 1;
     private int      minIdle                    = 3;
     private int      maxIdle                    = 8;
     private int      maxActive                  = 8;
@@ -46,20 +47,20 @@ public class Case0 extends TestCase {
 
     private long     minEvictableIdleTimeMillis = 3000;
     public final int LOOP_COUNT                 = 5;
-    public final int COUNT                      = 1000 * 1;
+    public final int COUNT                      = 1000 * 1000 * 1;
 
     protected void setUp() throws Exception {
-        // jdbcUrl = "jdbc:fake:dragoon_v25masterdb";
-        // user = "dragoon25";
-        // password = "dragoon25";
-        // driverClass = "com.alibaba.druid.mock.MockDriver";
+         jdbcUrl = "jdbc:fake:dragoon_v25masterdb";
+         user = "dragoon25";
+         password = "dragoon25";
+         driverClass = "com.alibaba.druid.mock.MockDriver";
 
-        jdbcUrl = "jdbc:mysql://10.20.153.104:3306/druid2";
-        user = "root";
-        password = "root";
+//        jdbcUrl = "jdbc:mysql://a.b.c.d:3306/masterdb";
+//        user = "x";
+//        password = "x";
     }
 
-    public void test_0() throws Exception {
+    public void test_druid() throws Exception {
         DruidDataSource dataSource = new DruidDataSource();
 
         dataSource.setInitialSize(initialSize);
@@ -82,7 +83,7 @@ public class Case0 extends TestCase {
         System.out.println();
     }
 
-    public void test_1() throws Exception {
+    public void f_test_1() throws Exception {
         final BasicDataSource dataSource = new BasicDataSource();
 
         dataSource.setInitialSize(initialSize);
@@ -105,7 +106,7 @@ public class Case0 extends TestCase {
         System.out.println();
     }
 
-    public void test_2() throws Exception {
+    public void f_test_2() throws Exception {
         BoneCPDataSource dataSource = new BoneCPDataSource();
         // dataSource.(10);
         // dataSource.setMaxActive(50);
@@ -126,6 +127,66 @@ public class Case0 extends TestCase {
         }
         System.out.println();
     }
+    
+    public void f_test_c3p0() throws Exception {
+        ComboPooledDataSource dataSource = new ComboPooledDataSource();
+        // dataSource.(10);
+        // dataSource.setMaxActive(50);
+        dataSource.setMinPoolSize(minIdle);
+        dataSource.setMaxPoolSize(maxIdle);
+
+        dataSource.setDriverClass(driverClass);
+        dataSource.setJdbcUrl(jdbcUrl);
+        // dataSource.setPoolPreparedStatements(true);
+        // dataSource.setMaxOpenPreparedStatements(100);
+        dataSource.setUser(user);
+        dataSource.setPassword(password);
+
+        for (int i = 0; i < LOOP_COUNT; ++i) {
+            p0(dataSource, "c3p0");
+        }
+        System.out.println();
+    }
+    
+    public void f_test_proxool() throws Exception {
+        ProxoolDataSource dataSource = new ProxoolDataSource();
+        // dataSource.(10);
+        // dataSource.setMaxActive(50);
+        dataSource.setMinimumConnectionCount(minIdle);
+        dataSource.setMaximumConnectionCount(maxIdle);
+
+        dataSource.setDriver(driverClass);
+        dataSource.setDriverUrl(jdbcUrl);
+        // dataSource.setPoolPreparedStatements(true);
+        // dataSource.setMaxOpenPreparedStatements(100);
+        dataSource.setUser(user);
+        dataSource.setPassword(password);
+
+        for (int i = 0; i < LOOP_COUNT; ++i) {
+            p0(dataSource, "proxool");
+        }
+        System.out.println();
+    }
+    
+    public void f_test_tomcat_jdbc() throws Exception {
+        org.apache.tomcat.jdbc.pool.DataSource dataSource = new org.apache.tomcat.jdbc.pool.DataSource();
+        // dataSource.(10);
+        // dataSource.setMaxActive(50);
+        dataSource.setMinIdle(minIdle);
+        dataSource.setMaxActive(maxIdle);
+        
+        dataSource.setDriverClassName(driverClass);
+        dataSource.setUrl(jdbcUrl);
+        // dataSource.setPoolPreparedStatements(true);
+        // dataSource.setMaxOpenPreparedStatements(100);
+        dataSource.setUsername(user);
+        dataSource.setPassword(password);
+        
+        for (int i = 0; i < LOOP_COUNT; ++i) {
+            p0(dataSource, "tomcat-jdbc");
+        }
+        System.out.println();
+    }
 
     private void p0(DataSource dataSource, String name) throws SQLException {
         long startMillis = System.currentTimeMillis();
@@ -135,9 +196,9 @@ public class Case0 extends TestCase {
         for (int i = 0; i < COUNT; ++i) {
             Connection conn = dataSource.getConnection();
             Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT 1");
-            rs.close();
-            stmt.close();
+//            ResultSet rs = stmt.executeQuery("SELECT 1");
+//            rs.close();
+//            stmt.close();
             conn.close();
         }
         long millis = System.currentTimeMillis() - startMillis;

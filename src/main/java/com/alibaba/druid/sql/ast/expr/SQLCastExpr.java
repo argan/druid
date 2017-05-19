@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,8 @@ import com.alibaba.druid.sql.visitor.SQLASTVisitor;
 
 public class SQLCastExpr extends SQLExprImpl {
 
-    private static final long serialVersionUID = 1L;
-
-    private SQLExpr           expr;
-    private SQLDataType       dataType;
+    protected SQLExpr     expr;
+    protected SQLDataType dataType;
 
     public SQLCastExpr(){
 
@@ -36,6 +34,9 @@ public class SQLCastExpr extends SQLExprImpl {
     }
 
     public void setExpr(SQLExpr expr) {
+        if (expr != null) {
+            expr.setParent(this);
+        }
         this.expr = expr;
     }
 
@@ -45,14 +46,6 @@ public class SQLCastExpr extends SQLExprImpl {
 
     public void setDataType(SQLDataType dataType) {
         this.dataType = dataType;
-    }
-
-    public void output(StringBuffer buf) {
-        buf.append("CAST(");
-        this.expr.output(buf);
-        buf.append(" AS ");
-        this.dataType.output(buf);
-        buf.append(")");
     }
 
     protected void accept0(SQLASTVisitor visitor) {

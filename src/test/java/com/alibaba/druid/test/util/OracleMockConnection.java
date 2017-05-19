@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.test.util;
 
 import java.math.BigDecimal;
@@ -11,11 +26,17 @@ import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Calendar;
+import java.util.EnumSet;
 import java.util.Properties;
 import java.util.TimeZone;
 
 import oracle.jdbc.OracleOCIFailover;
 import oracle.jdbc.OracleSavepoint;
+import oracle.jdbc.aq.AQDequeueOptions;
+import oracle.jdbc.aq.AQEnqueueOptions;
+import oracle.jdbc.aq.AQMessage;
+import oracle.jdbc.aq.AQNotificationRegistration;
+import oracle.jdbc.dcn.DatabaseChangeRegistration;
 import oracle.jdbc.internal.OracleConnection;
 import oracle.jdbc.pool.OracleConnectionCacheCallback;
 import oracle.sql.ARRAY;
@@ -715,12 +736,78 @@ public class OracleMockConnection extends MockConnection implements oracle.jdbc.
             throw new MockConnectionClosedException();
         }
 
-        return new OracleMockPreparedStatement(this, sql);
+        return this.getDriver().createMockPreparedStatement(this, sql);
     }
 
-    @Override
     public void shutdown(int arg0) throws SQLException {
         // TODO Auto-generated method stub
 
+    }
+
+    @Override
+    public void commit(EnumSet<CommitOption> arg0) throws SQLException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public AQMessage dequeue(String arg0, AQDequeueOptions arg1, byte[] arg2) throws SQLException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public AQMessage dequeue(String arg0, AQDequeueOptions arg1, String arg2) throws SQLException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public void enqueue(String arg0, AQEnqueueOptions arg1, AQMessage arg2) throws SQLException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public DatabaseChangeRegistration getDatabaseChangeRegistration(int arg0) throws SQLException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public AQNotificationRegistration[] registerAQNotification(String[] arg0, Properties[] arg1, Properties arg2)
+                                                                                                                 throws SQLException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public DatabaseChangeRegistration registerDatabaseChangeNotification(Properties arg0) throws SQLException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public void shutdown(DatabaseShutdownMode arg0) throws SQLException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public void startup(DatabaseStartupMode arg0) throws SQLException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public void unregisterAQNotification(AQNotificationRegistration arg0) throws SQLException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public void unregisterDatabaseChangeNotification(DatabaseChangeRegistration arg0) throws SQLException {
+        // TODO Auto-generated method stub
+        
     }
 }

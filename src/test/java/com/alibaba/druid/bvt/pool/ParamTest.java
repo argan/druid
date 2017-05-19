@@ -1,8 +1,23 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.bvt.pool;
 
 import java.sql.Connection;
 
-import junit.framework.Assert;
+import org.junit.Assert;
 import junit.framework.TestCase;
 
 import com.alibaba.druid.pool.DruidDataSource;
@@ -13,7 +28,7 @@ import com.alibaba.druid.stat.JdbcStatManager;
 public class ParamTest extends TestCase {
 
     protected void setUp() throws Exception {
-        Assert.assertEquals(0, DruidDataSourceStatManager.getInstance().getDataSourceList().size());
+        DruidDataSourceStatManager.clear();
     }
 
     protected void tearDown() throws Exception {
@@ -31,7 +46,7 @@ public class ParamTest extends TestCase {
         JdbcStatManager.getInstance().reset();
 
         dataSource.init();
-        JdbcDataSourceStat stat =dataSource.getDataSourceStat();
+        JdbcDataSourceStat stat = dataSource.getDataSourceStat();
 
         Assert.assertEquals(0, stat.getConnectionStat().getConnectCount());
         Assert.assertEquals(1, dataSource.getProxyFilters().size());
@@ -51,7 +66,7 @@ public class ParamTest extends TestCase {
 
         dataSource.close();
 
-//        Assert.assertEquals(0, JdbcStatManager.getInstance().getDataSources().size());
+        // Assert.assertEquals(0, JdbcStatManager.getInstance().getDataSources().size());
 
         Assert.assertEquals(1, stat.getConnectionStat().getConnectCount());
         Assert.assertEquals(1, stat.getConnectionStat().getCloseCount());
@@ -66,9 +81,16 @@ public class ParamTest extends TestCase {
         DruidDataSource dataSource = new DruidDataSource();
         dataSource.setUrl("jdbc:mock:");
         dataSource.setInitialSize(0);
-        dataSource.setMaxActive(0);
         dataSource.setMinIdle(0);
         dataSource.setMaxIdle(0);
+
+        Exception error = null;
+        try {
+            dataSource.setMaxActive(0);
+        } catch (Exception e) {
+            error = e;
+        }
+        Assert.assertNotNull(error);
 
         Assert.assertEquals(0, dataSource.getProxyFilters().size());
 
@@ -76,18 +98,12 @@ public class ParamTest extends TestCase {
 
         JdbcStatManager.getInstance().reset();
 
-//        Assert.assertEquals(0, DruidDataSourceStatManager.getInstance().getDataSourceList().size());
-//        Assert.assertEquals(0, JdbcStatManager.getInstance().getDataSources().size());
+        // Assert.assertEquals(0, DruidDataSourceStatManager.getInstance().getDataSourceList().size());
+        // Assert.assertEquals(0, JdbcStatManager.getInstance().getDataSources().size());
 
         Assert.assertEquals(1, dataSource.getProxyFilters().size());
 
-        Exception error = null;
-        try {
-            dataSource.getConnection();
-        } catch (Exception ex) {
-            error = ex;
-        }
-        Assert.assertNotNull(error);
+        dataSource.getConnection();
 
         dataSource.close();
     }
@@ -104,10 +120,10 @@ public class ParamTest extends TestCase {
         Assert.assertEquals(1, dataSource.getProxyFilters().size());
 
         JdbcStatManager.getInstance().reset();
-        
+
         dataSource.init();
-        JdbcDataSourceStat stat =dataSource.getDataSourceStat();
-        
+        JdbcDataSourceStat stat = dataSource.getDataSourceStat();
+
         Assert.assertEquals(10, stat.getConnectionStat().getConnectCount());
 
         for (int i = 0; i < 10; ++i) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,16 +33,14 @@ import java.sql.SQLXML;
 import java.sql.Statement;
 import java.util.Calendar;
 
-import com.alibaba.druid.proxy.jdbc.ResultSetProxy;
-
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public final class DruidPooledResultSet extends PoolableWrapper implements ResultSet {
 
     private final ResultSet         rs;
     private final DruidPooledStatement stmt;
-    private boolean                 closed        = false;
+    protected boolean               closed        = false;
 
     protected int                   cursorIndex   = 0;
     protected int                   fetchRowCount = 0;
@@ -92,6 +90,10 @@ public final class DruidPooledResultSet extends PoolableWrapper implements Resul
         } catch (Throwable t) {
             throw checkException(t);
         }
+    }
+    
+    public int getFetchRowCount() {
+        return fetchRowCount;
     }
 
     @Override
@@ -1767,18 +1769,5 @@ public final class DruidPooledResultSet extends PoolableWrapper implements Resul
 
     public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
         throw new SQLFeatureNotSupportedException();
-    }
-    
-    @SuppressWarnings("unchecked")
-    public <T> T unwrap(Class<T> iface) throws SQLException {
-        if (iface == ResultSet.class) {
-            if (rs instanceof ResultSetProxy) {
-                return rs.unwrap(iface);
-            }
-            
-            return (T) rs;
-        }
-        
-        return super.unwrap(iface);
     }
 }

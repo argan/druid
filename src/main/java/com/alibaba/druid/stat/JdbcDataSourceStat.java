@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,67 +15,221 @@
  */
 package com.alibaba.druid.stat;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import com.alibaba.druid.Constants;
+import com.alibaba.druid.filter.Filter;
+import com.alibaba.druid.filter.stat.StatFilter;
+import com.alibaba.druid.proxy.jdbc.DataSourceProxy;
+import com.alibaba.druid.support.logging.Log;
+import com.alibaba.druid.support.logging.LogFactory;
+import com.alibaba.druid.util.Histogram;
 
 import javax.management.JMException;
 import javax.management.openmbean.CompositeType;
 import javax.management.openmbean.TabularData;
 import javax.management.openmbean.TabularDataSupport;
 import javax.management.openmbean.TabularType;
-
-import com.alibaba.druid.filter.Filter;
-import com.alibaba.druid.filter.stat.StatFilter;
-import com.alibaba.druid.proxy.jdbc.DataSourceProxy;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class JdbcDataSourceStat implements JdbcDataSourceStatMBean {
 
+    private final static Log                                    LOG                     = LogFactory.getLog(JdbcDataSourceStat.class);
+
     private final String                                        name;
     private final String                                        url;
+    private String                                              dbType;
 
-    private final JdbcConnectionStat                            connectionStat = new JdbcConnectionStat();
-    private final JdbcResultSetStat                             resultSetStat  = new JdbcResultSetStat();
-    private final JdbcStatementStat                             statementStat  = new JdbcStatementStat();
+    private final JdbcConnectionStat                            connectionStat          = new JdbcConnectionStat();
+    private final JdbcResultSetStat                             resultSetStat           = new JdbcResultSetStat();
+    private final JdbcStatementStat                             statementStat           = new JdbcStatementStat();
 
-    private int                                                 maxSize        = 1000 * 1;
+    private int                                                 maxSqlSize              = 1000;
 
-    private ReentrantReadWriteLock                              lock           = new ReentrantReadWriteLock();
-    private final LinkedHashMap<String, JdbcSqlStat>            sqlStatMap     = new LinkedHashMap<String, JdbcSqlStat>(
-                                                                                                                        maxSize,
-                                                                                                                        0.75f,
-                                                                                                                        false);
+    private ReentrantReadWriteLock                              lock                    = new ReentrantReadWriteLock();
+    private final LinkedHashMap<String, JdbcSqlStat>            sqlStatMap;
 
-    // private final ConcurrentMap<String, JdbcSqlStat> sqlStatMap = new ConcurrentHashMap<String, JdbcSqlStat>();
+    private final AtomicLong                                    skipSqlCount            = new AtomicLong();
 
-    private final ConcurrentMap<Long, JdbcConnectionStat.Entry> connections    = new ConcurrentHashMap<Long, JdbcConnectionStat.Entry>();
+    private final Histogram                                     connectionHoldHistogram = new Histogram(new long[] { //
+                                                                                                        //
+            1, 10, 100, 1000, 10 * 1000, //
+            100 * 1000, 1000 * 1000
+                                                                                                        //
+                                                                                                        });
+
+    private final ConcurrentMap<Long, JdbcConnectionStat.Entry> connections             = new ConcurrentHashMap<Long, JdbcConnectionStat.Entry>(
+                                                                                                                                                16,
+                                                                                                                                                0.75f,
+                                                                                                                                                1);
+
+    private final AtomicLong                                    clobOpenCount           = new AtomicLong();
+
+    private final AtomicLong                                    blobOpenCount           = new AtomicLong();
+    private final AtomicLong                                    keepAliveCheckCount      = new AtomicLong();
+
+    private boolean                                             resetStatEnable         = true;
+
+    private static JdbcDataSourceStat                           global;
+
+    static {
+        String dbType = null;
+        {
+            String property = System.getProperty("druid.globalDbType");
+            if (property != null && property.length() > 0) {
+                dbType = property;
+            }
+        }
+        global = new JdbcDataSourceStat("Global", "Global", dbType);
+    }
+
+    public static JdbcDataSourceStat getGlobal() {
+        return global;
+    }
+
+    public static void setGlobal(JdbcDataSourceStat value) {
+        global = value;
+    }
+
+    public void configFromProperties(Properties properties) {
+
+    }
+
+    public boolean isResetStatEnable() {
+        return resetStatEnable;
+    }
+
+    public void setResetStatEnable(boolean resetStatEnable) {
+        this.resetStatEnable = resetStatEnable;
+    }
 
     public JdbcDataSourceStat(String name, String url){
+        this(name, url, null);
+    }
+
+    public JdbcDataSourceStat(String name, String url, String dbType){
+        this(name, url, dbType, null);
+    }
+
+    @SuppressWarnings("serial")
+    public JdbcDataSourceStat(String name, String url, String dbType, Properties connectProperties){
         this.name = name;
         this.url = url;
+        this.dbType = dbType;
+
+        if (connectProperties != null) {
+            Object arg = connectProperties.get(Constants.DRUID_STAT_SQL_MAX_SIZE);
+
+            if (arg == null) {
+                arg = System.getProperty(Constants.DRUID_STAT_SQL_MAX_SIZE);
+            }
+
+            if (arg != null) {
+                try {
+                    maxSqlSize = Integer.parseInt(arg.toString());
+                } catch (NumberFormatException ex) {
+                    LOG.error("maxSize parse error", ex);
+                }
+            }
+        }
+
+        sqlStatMap = new LinkedHashMap<String, JdbcSqlStat>(16, 0.75f, false) {
+
+            protected boolean removeEldestEntry(Map.Entry<String, JdbcSqlStat> eldest) {
+                boolean remove = (size() > maxSqlSize);
+
+                if (remove) {
+                    JdbcSqlStat sqlStat = eldest.getValue();
+                    if (sqlStat.getRunningCount() > 0 || sqlStat.getExecuteCount() > 0) {
+                        skipSqlCount.incrementAndGet();
+                    }
+                }
+
+                return remove;
+            }
+        };
+    }
+
+    public int getMaxSqlSize() {
+        return this.maxSqlSize;
+    }
+
+    public void setMaxSqlSize(int value) {
+        if (value == this.maxSqlSize) {
+            return;
+        }
+
+        lock.writeLock().lock();
+        try {
+            if (value < this.maxSqlSize) {
+                int removeCount = this.maxSqlSize - value;
+                Iterator<Map.Entry<String, JdbcSqlStat>> iter = sqlStatMap.entrySet().iterator();
+                while (iter.hasNext()) {
+                    iter.next();
+                    if (removeCount > 0) {
+                        iter.remove();
+                        removeCount--;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            this.maxSqlSize = value;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public String getDbType() {
+        return dbType;
+    }
+
+    public void setDbType(String dbType) {
+        this.dbType = dbType;
+    }
+
+    public long getSkipSqlCount() {
+        return skipSqlCount.get();
+    }
+
+    public long getSkipSqlCountAndReset() {
+        return skipSqlCount.getAndSet(0);
     }
 
     public void reset() {
+        if (!isResetStatEnable()) {
+            return;
+        }
+
+        blobOpenCount.set(0);
+        clobOpenCount.set(0);
+
         connectionStat.reset();
         statementStat.reset();
         resultSetStat.reset();
-        
+        connectionHoldHistogram.reset();
+        skipSqlCount.set(0);
+
         lock.writeLock().lock();
         try {
-        	Iterator<Map.Entry<String, JdbcSqlStat>> iter = sqlStatMap.entrySet().iterator();
-        	while (iter.hasNext()) {
-        		Map.Entry<String, JdbcSqlStat> entry = iter.next();
-        		JdbcSqlStat stat = entry.getValue();
-        		if (stat.getExecuteCount() == 0) {
-        			iter.remove();
-        		} else {
-        			stat.reset();
-        		}
-        	}
+            Iterator<Map.Entry<String, JdbcSqlStat>> iter = sqlStatMap.entrySet().iterator();
+            while (iter.hasNext()) {
+                Map.Entry<String, JdbcSqlStat> entry = iter.next();
+                JdbcSqlStat stat = entry.getValue();
+                if (stat.getExecuteCount() == 0 && stat.getRunningCount() == 0) {
+                    stat.setRemoved(true);
+                    iter.remove();
+                } else {
+                    stat.reset();
+                }
+            }
         } finally {
             lock.writeLock().unlock();
         }
@@ -83,7 +237,10 @@ public class JdbcDataSourceStat implements JdbcDataSourceStatMBean {
         for (JdbcConnectionStat.Entry connectionStat : connections.values()) {
             connectionStat.reset();
         }
-        // connections.clear();
+    }
+
+    public Histogram getConnectionHoldHistogram() {
+        return connectionHoldHistogram;
     }
 
     public JdbcConnectionStat getConnectionStat() {
@@ -127,6 +284,10 @@ public class JdbcDataSourceStat implements JdbcDataSourceStatMBean {
         }
 
         return null;
+    }
+
+    public JdbcSqlStat getSqlStat(int id) {
+        return getSqlStat((long) id);
     }
 
     public JdbcSqlStat getSqlStat(long id) {
@@ -173,7 +334,7 @@ public class JdbcDataSourceStat implements JdbcDataSourceStatMBean {
     }
 
     public Map<String, JdbcSqlStat> getSqlStatMap() {
-        Map<String, JdbcSqlStat> map = new HashMap<String, JdbcSqlStat>();
+        Map<String, JdbcSqlStat> map = new LinkedHashMap<String, JdbcSqlStat>(sqlStatMap.size());
         lock.readLock().lock();
         try {
             map.putAll(sqlStatMap);
@@ -181,6 +342,60 @@ public class JdbcDataSourceStat implements JdbcDataSourceStatMBean {
             lock.readLock().unlock();
         }
         return map;
+    }
+
+    public List<JdbcSqlStatValue> getSqlStatMapAndReset() {
+        List<JdbcSqlStat> stats = new ArrayList<JdbcSqlStat>(sqlStatMap.size());
+        lock.writeLock().lock();
+        try {
+            Iterator<Map.Entry<String, JdbcSqlStat>> iter = sqlStatMap.entrySet().iterator();
+            while (iter.hasNext()) {
+                Map.Entry<String, JdbcSqlStat> entry = iter.next();
+                JdbcSqlStat stat = entry.getValue();
+                if (stat.getExecuteCount() == 0 && stat.getRunningCount() == 0) {
+                    stat.setRemoved(true);
+                    iter.remove();
+                } else {
+                    stats.add(entry.getValue());
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+        List<JdbcSqlStatValue> values = new ArrayList<JdbcSqlStatValue>(stats.size());
+        for (JdbcSqlStat stat : stats) {
+            JdbcSqlStatValue value = stat.getValueAndReset();
+            if (value.getExecuteCount() == 0 && value.getRunningCount() == 0) {
+                continue;
+            }
+            values.add(value);
+        }
+        return values;
+    }
+
+    public List<JdbcSqlStatValue> getRuningSqlList() {
+        List<JdbcSqlStat> stats = new ArrayList<JdbcSqlStat>(sqlStatMap.size());
+        lock.readLock().lock();
+        try {
+            for (Map.Entry<String, JdbcSqlStat> entry : sqlStatMap.entrySet()) {
+                JdbcSqlStat stat = entry.getValue();
+                if (stat.getRunningCount() >= 0) {
+                    stats.add(entry.getValue());
+                }
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+
+        List<JdbcSqlStatValue> values = new ArrayList<JdbcSqlStatValue>(stats.size());
+        for (JdbcSqlStat stat : stats) {
+            JdbcSqlStatValue value = stat.getValue(false);
+            if (value.getRunningCount() > 0) {
+                values.add(value);
+            }
+        }
+        return values;
     }
 
     public JdbcSqlStat getSqlStat(String sql) {
@@ -198,6 +413,8 @@ public class JdbcDataSourceStat implements JdbcDataSourceStatMBean {
             JdbcSqlStat sqlStat = sqlStatMap.get(sql);
             if (sqlStat == null) {
                 sqlStat = new JdbcSqlStat(sql);
+                sqlStat.setDbType(this.dbType);
+                sqlStat.setName(this.name);
                 sqlStatMap.put(sql, sqlStat);
             }
 
@@ -257,4 +474,39 @@ public class JdbcDataSourceStat implements JdbcDataSourceStatMBean {
         return connectionStat.getHistorgramValues();
     }
 
+    public long getClobOpenCount() {
+        return clobOpenCount.get();
+    }
+
+    public long getClobOpenCountAndReset() {
+        return clobOpenCount.getAndSet(0);
+    }
+
+    public void incrementClobOpenCount() {
+        clobOpenCount.incrementAndGet();
+    }
+
+    public long getBlobOpenCount() {
+        return blobOpenCount.get();
+    }
+
+    public long getBlobOpenCountAndReset() {
+        return blobOpenCount.getAndSet(0);
+    }
+
+    public void incrementBlobOpenCount() {
+        blobOpenCount.incrementAndGet();
+    }
+
+    public long getKeepAliveCheckCount() {
+        return keepAliveCheckCount.get();
+    }
+
+    public long getKeepAliveCheckCountAndReset() {
+        return keepAliveCheckCount.getAndSet(0);
+    }
+
+    public void addKeepAliveCheckCount(long delta) {
+        keepAliveCheckCount.addAndGet(delta);
+    }
 }

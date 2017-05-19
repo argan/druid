@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.pool.vendor;
 
 import java.io.Serializable;
@@ -6,32 +21,23 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 import com.alibaba.druid.pool.ValidConnectionChecker;
-import com.alibaba.druid.support.logging.Log;
-import com.alibaba.druid.support.logging.LogFactory;
+import com.alibaba.druid.pool.ValidConnectionCheckerAdapter;
 import com.alibaba.druid.util.JdbcUtils;
 
 /**
  * A MSSQLValidConnectionChecker.
  */
-public class MSSQLValidConnectionChecker implements ValidConnectionChecker, Serializable {
+public class MSSQLValidConnectionChecker extends ValidConnectionCheckerAdapter implements ValidConnectionChecker, Serializable {
 
-    private static final long   serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-    private static final String QUERY            = "SELECT 1";
-    private static final Log    LOG              = LogFactory.getLog(MSSQLValidConnectionChecker.class);
+    public MSSQLValidConnectionChecker(){
 
-    public boolean isValidConnection(final Connection c, String valiateQuery, int validationQueryTimeout) {
-        try {
-            if (c.isClosed()) {
-                return false;
-            }
-        } catch (SQLException ex) {
-            // skip
+    }
+
+    public boolean isValidConnection(final Connection c, String validateQuery, int validationQueryTimeout) throws Exception {
+        if (c.isClosed()) {
             return false;
-        }
-
-        if (valiateQuery == null) {
-            return true;
         }
 
         Statement stmt = null;
@@ -39,11 +45,10 @@ public class MSSQLValidConnectionChecker implements ValidConnectionChecker, Seri
         try {
             stmt = c.createStatement();
             stmt.setQueryTimeout(validationQueryTimeout);
-            stmt.execute(QUERY);
+            stmt.execute(validateQuery);
             return true;
         } catch (SQLException e) {
-            LOG.warn("warning: connection validation failed for current managed connection.");
-            return false;
+            throw e;
         } finally {
             JdbcUtils.close(stmt);
         }

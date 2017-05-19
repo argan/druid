@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,28 +21,50 @@ import java.util.List;
 import java.util.Map;
 
 import com.alibaba.druid.sql.ast.SQLCommentHint;
-import com.alibaba.druid.sql.ast.SQLPartitioningClause;
+import com.alibaba.druid.sql.ast.SQLExpr;
+import com.alibaba.druid.sql.ast.SQLName;
+import com.alibaba.druid.sql.ast.SQLObject;
+import com.alibaba.druid.sql.ast.SQLPartitionBy;
 import com.alibaba.druid.sql.ast.statement.SQLCreateTableStatement;
+import com.alibaba.druid.sql.ast.statement.SQLExprTableSource;
 import com.alibaba.druid.sql.ast.statement.SQLSelect;
+import com.alibaba.druid.sql.dialect.mysql.ast.MySqlObjectImpl;
 import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlASTVisitor;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
+import com.alibaba.druid.util.JdbcConstants;
 
-@SuppressWarnings("serial")
 public class MySqlCreateTableStatement extends SQLCreateTableStatement implements MySqlStatement {
 
-    private boolean               ifNotExiists = false;
+    private Map<String, SQLObject> tableOptions = new LinkedHashMap<String, SQLObject>();
 
-    private Map<String, String>   tableOptions = new LinkedHashMap<String, String>();
+    private SQLPartitionBy  partitioning;
 
-    protected SQLSelect           query;
+    private List<SQLCommentHint>   hints        = new ArrayList<SQLCommentHint>();
 
-    private SQLPartitioningClause partitioning;
+    private List<SQLCommentHint>   optionHints  = new ArrayList<SQLCommentHint>();
+
+    private SQLExprTableSource     like;
+    
+    private SQLName                tableGroup;
 
     public MySqlCreateTableStatement(){
-
+        super (JdbcConstants.MYSQL);
     }
 
-    private List<SQLCommentHint> hints = new ArrayList<SQLCommentHint>();
+    public SQLExprTableSource getLike() {
+        return like;
+    }
+
+    public void setLike(SQLName like) {
+        this.setLike(new SQLExprTableSource(like));
+    }
+
+    public void setLike(SQLExprTableSource like) {
+        if (like != null) {
+            like.setParent(this);
+        }
+        this.like = like;
+    }
 
     public List<SQLCommentHint> getHints() {
         return hints;
@@ -52,65 +74,30 @@ public class MySqlCreateTableStatement extends SQLCreateTableStatement implement
         this.hints = hints;
     }
 
-    public void setTableOptions(Map<String, String> tableOptions) {
+    public void setTableOptions(Map<String, SQLObject> tableOptions) {
         this.tableOptions = tableOptions;
     }
 
-    public SQLPartitioningClause getPartitioning() {
+    public SQLPartitionBy getPartitioning() {
         return partitioning;
     }
 
-    public void setPartitioning(SQLPartitioningClause partitioning) {
+    public void setPartitioning(SQLPartitionBy partitioning) {
         this.partitioning = partitioning;
     }
 
-    public Map<String, String> getTableOptions() {
+    public Map<String, SQLObject> getTableOptions() {
         return tableOptions;
     }
 
+    @Deprecated
     public SQLSelect getQuery() {
-        return query;
+        return select;
     }
 
+    @Deprecated
     public void setQuery(SQLSelect query) {
-        this.query = query;
-    }
-
-    @Override
-    public void output(StringBuffer buf) {
-        if (Type.GLOBAL_TEMPORARY.equals(this.type)) {
-            buf.append("CREATE TEMPORARY TABLE ");
-        } else {
-            buf.append("CREATE TABLE ");
-        }
-
-        if (ifNotExiists) {
-            buf.append("IF NOT EXISTS ");
-        }
-
-        this.tableSource.output(buf);
-        buf.append(" ");
-        buf.append("(");
-        for (int i = 0, size = tableElementList.size(); i < size; ++i) {
-            if (i != 0) {
-                buf.append(", ");
-            }
-            tableElementList.get(i).output(buf);
-        }
-        buf.append(")");
-
-        if (query != null) {
-            buf.append(" ");
-            query.output(buf);
-        }
-    }
-
-    public boolean isIfNotExiists() {
-        return ifNotExiists;
-    }
-
-    public void setIfNotExiists(boolean ifNotExiists) {
-        this.ifNotExiists = ifNotExiists;
+        this.select = query;
     }
 
     @Override
@@ -127,7 +114,59 @@ public class MySqlCreateTableStatement extends SQLCreateTableStatement implement
             this.acceptChild(visitor, getHints());
             this.acceptChild(visitor, getTableSource());
             this.acceptChild(visitor, getTableElementList());
+            this.acceptChild(visitor, getLike());
+            this.acceptChild(visitor, getSelect());
         }
         visitor.endVisit(this);
+    }
+
+    public static class TableSpaceOption extends MySqlObjectImpl {
+
+        private SQLName name;
+        private SQLExpr storage;
+
+        public SQLName getName() {
+            return name;
+        }
+
+        public void setName(SQLName name) {
+            this.name = name;
+        }
+
+        public SQLExpr getStorage() {
+            return storage;
+        }
+
+        public void setStorage(SQLExpr storage) {
+            this.storage = storage;
+        }
+
+        @Override
+        public void accept0(MySqlASTVisitor visitor) {
+            if (visitor.visit(this)) {
+                acceptChild(visitor, getName());
+                acceptChild(visitor, getStorage());
+            }
+            visitor.endVisit(this);
+        }
+
+    }
+
+    public List<SQLCommentHint> getOptionHints() {
+        return optionHints;
+    }
+
+    public void setOptionHints(List<SQLCommentHint> optionHints) {
+        this.optionHints = optionHints;
+    }
+
+    
+    public SQLName getTableGroup() {
+        return tableGroup;
+    }
+
+    
+    public void setTableGroup(SQLName tableGroup) {
+        this.tableGroup = tableGroup;
     }
 }

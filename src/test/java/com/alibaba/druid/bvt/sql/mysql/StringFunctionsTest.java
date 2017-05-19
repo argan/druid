@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@ package com.alibaba.druid.bvt.sql.mysql;
 
 import java.util.List;
 
+import org.junit.Assert;
+import junit.framework.TestCase;
+
 import com.alibaba.druid.sql.ast.SQLStatement;
 import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlOutputVisitor;
 import com.alibaba.druid.sql.parser.SQLStatementParser;
-
-import junit.framework.Assert;
-import junit.framework.TestCase;
 
 public class StringFunctionsTest extends TestCase {
 
@@ -519,7 +519,7 @@ public class StringFunctionsTest extends TestCase {
 
         String text = output(stmtList);
 
-        Assert.assertEquals("SELECT SUBSTRING('Sakila' FROM -4 FOR 2);", text);
+        Assert.assertEquals("SELECT SUBSTRING('Sakila', -4, 2);", text);
     }
 
     public void test_45() throws Exception {
@@ -530,7 +530,7 @@ public class StringFunctionsTest extends TestCase {
 
         String text = output(stmtList);
 
-        Assert.assertEquals("SELECT SUBSTRING('foobarbar' FROM 4);", text);
+        Assert.assertEquals("SELECT SUBSTRING('foobarbar', 4);", text);
     }
 
     public void test_46() throws Exception {

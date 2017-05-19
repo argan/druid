@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,7 @@ public class SQLQueryExpr extends SQLExprImpl implements Serializable {
     }
 
     public SQLQueryExpr(SQLSelect select){
-
-        this.subQuery = select;
+        setSubQuery(select);
     }
 
     public SQLSelect getSubQuery() {
@@ -40,6 +39,9 @@ public class SQLQueryExpr extends SQLExprImpl implements Serializable {
     }
 
     public void setSubQuery(SQLSelect subQuery) {
+        if (subQuery != null) {
+            subQuery.setParent(this);
+        }
         this.subQuery = subQuery;
     }
 

@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.sql.dialect.oracle.ast.stmt;
 
 import java.util.ArrayList;
@@ -5,11 +20,11 @@ import java.util.List;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.SQLHint;
+import com.alibaba.druid.sql.ast.statement.SQLErrorLoggingClause;
 import com.alibaba.druid.sql.ast.statement.SQLInsertInto;
 import com.alibaba.druid.sql.ast.statement.SQLSelect;
 import com.alibaba.druid.sql.dialect.oracle.ast.OracleSQLObject;
 import com.alibaba.druid.sql.dialect.oracle.ast.OracleSQLObjectImpl;
-import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleErrorLoggingClause;
 import com.alibaba.druid.sql.dialect.oracle.ast.clause.OracleReturningClause;
 import com.alibaba.druid.sql.dialect.oracle.visitor.OracleASTVisitor;
 import com.alibaba.druid.sql.visitor.SQLASTVisitor;
@@ -20,12 +35,10 @@ public class OracleMultiInsertStatement extends OracleStatementImpl {
         ALL, FIRST
     }
 
-    private static final long serialVersionUID = 1L;
-
-    private SQLSelect         subQuery;
-    private Option            option;
-    private List<Entry>       entries          = new ArrayList<Entry>();
-    private List<SQLHint>     hints            = new ArrayList<SQLHint>(1);
+    private SQLSelect     subQuery;
+    private Option        option;
+    private List<Entry>   entries = new ArrayList<Entry>();
+    private List<SQLHint> hints   = new ArrayList<SQLHint>(1);
 
     public List<SQLHint> getHints() {
         return hints;
@@ -39,8 +52,11 @@ public class OracleMultiInsertStatement extends OracleStatementImpl {
         return entries;
     }
 
-    public void setEntries(List<Entry> entries) {
-        this.entries = entries;
+    public void addEntry(Entry entry) {
+        if (entry != null) {
+            entry.setParent(this);
+        }
+        this.entries.add(entry);
     }
 
     public Option getOption() {
@@ -74,8 +90,7 @@ public class OracleMultiInsertStatement extends OracleStatementImpl {
 
     public static class ConditionalInsertClause extends OracleSQLObjectImpl implements Entry {
 
-        private static final long                 serialVersionUID = 1L;
-        private List<ConditionalInsertClauseItem> items            = new ArrayList<ConditionalInsertClauseItem>();
+        private List<ConditionalInsertClauseItem> items = new ArrayList<ConditionalInsertClauseItem>();
         private InsertIntoClause                  elseItem;
 
         public InsertIntoClause getElseItem() {
@@ -90,8 +105,11 @@ public class OracleMultiInsertStatement extends OracleStatementImpl {
             return items;
         }
 
-        public void setItems(List<ConditionalInsertClauseItem> items) {
-            this.items = items;
+        public void addItem(ConditionalInsertClauseItem item) {
+            if (item != null) {
+                item.setParent(this);
+            }
+            this.items.add(item);
         }
 
         @Override
@@ -107,9 +125,8 @@ public class OracleMultiInsertStatement extends OracleStatementImpl {
 
     public static class ConditionalInsertClauseItem extends OracleSQLObjectImpl {
 
-        private static final long serialVersionUID = 1L;
-        private SQLExpr           when;
-        private InsertIntoClause  then;
+        private SQLExpr          when;
+        private InsertIntoClause then;
 
         public SQLExpr getWhen() {
             return when;
@@ -140,10 +157,8 @@ public class OracleMultiInsertStatement extends OracleStatementImpl {
 
     public static class InsertIntoClause extends SQLInsertInto implements OracleSQLObject, Entry {
 
-        private static final long        serialVersionUID = 1L;
-
         private OracleReturningClause    returning;
-        private OracleErrorLoggingClause errorLogging;
+        private SQLErrorLoggingClause errorLogging;
 
         public InsertIntoClause(){
 
@@ -157,11 +172,11 @@ public class OracleMultiInsertStatement extends OracleStatementImpl {
             this.returning = returning;
         }
 
-        public OracleErrorLoggingClause getErrorLogging() {
+        public SQLErrorLoggingClause getErrorLogging() {
             return errorLogging;
         }
 
-        public void setErrorLogging(OracleErrorLoggingClause errorLogging) {
+        public void setErrorLogging(SQLErrorLoggingClause errorLogging) {
             this.errorLogging = errorLogging;
         }
 
@@ -175,7 +190,7 @@ public class OracleMultiInsertStatement extends OracleStatementImpl {
             if (visitor.visit(this)) {
                 this.acceptChild(visitor, tableSource);
                 this.acceptChild(visitor, columns);
-                this.acceptChild(visitor, values);
+                this.acceptChild(visitor, valuesList);
                 this.acceptChild(visitor, query);
                 this.acceptChild(visitor, returning);
                 this.acceptChild(visitor, errorLogging);

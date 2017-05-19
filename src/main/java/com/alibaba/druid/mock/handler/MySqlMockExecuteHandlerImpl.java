@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.mock.handler;
 
 import java.sql.ResultSet;
@@ -6,11 +21,13 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.List;
 
+import com.alibaba.druid.mock.MockPreparedStatement;
 import com.alibaba.druid.mock.MockResultSet;
 import com.alibaba.druid.mock.MockResultSetMetaData;
-import com.alibaba.druid.mock.MockStatement;
+import com.alibaba.druid.mock.MockStatementBase;
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.SQLStatement;
+import com.alibaba.druid.sql.ast.expr.SQLBooleanExpr;
 import com.alibaba.druid.sql.ast.expr.SQLCharExpr;
 import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
 import com.alibaba.druid.sql.ast.expr.SQLIntegerExpr;
@@ -19,6 +36,7 @@ import com.alibaba.druid.sql.ast.expr.SQLNCharExpr;
 import com.alibaba.druid.sql.ast.expr.SQLNullExpr;
 import com.alibaba.druid.sql.ast.expr.SQLNumberExpr;
 import com.alibaba.druid.sql.ast.expr.SQLNumericLiteralExpr;
+import com.alibaba.druid.sql.ast.expr.SQLVariantRefExpr;
 import com.alibaba.druid.sql.ast.statement.SQLExprTableSource;
 import com.alibaba.druid.sql.ast.statement.SQLSelect;
 import com.alibaba.druid.sql.ast.statement.SQLSelectItem;
@@ -26,7 +44,6 @@ import com.alibaba.druid.sql.ast.statement.SQLSelectQuery;
 import com.alibaba.druid.sql.ast.statement.SQLSelectQueryBlock;
 import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
 import com.alibaba.druid.sql.ast.statement.SQLTableSource;
-import com.alibaba.druid.sql.dialect.mysql.ast.expr.MySqlBooleanExpr;
 import com.alibaba.druid.sql.dialect.mysql.ast.statement.CobarShowStatus;
 import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.alibaba.druid.sql.parser.SQLStatementParser;
@@ -35,7 +52,7 @@ import com.alibaba.druid.util.jdbc.ResultSetMetaDataBase.ColumnMetaData;
 public class MySqlMockExecuteHandlerImpl implements MockExecuteHandler {
 
     @Override
-    public ResultSet executeQuery(MockStatement statement, String sql) throws SQLException {
+    public ResultSet executeQuery(MockStatementBase statement, String sql) throws SQLException {
         SQLStatementParser parser = new MySqlStatementParser(sql);
         List<SQLStatement> stmtList = parser.parseStatementList(); //
 
@@ -67,7 +84,7 @@ public class MySqlMockExecuteHandlerImpl implements MockExecuteHandler {
         throw new SQLException("TODO");
     }
 
-    public ResultSet executeQuery(MockStatement statement, SQLSelectQueryBlock query) throws SQLException {
+    public ResultSet executeQuery(MockStatementBase statement, SQLSelectQueryBlock query) throws SQLException {
         SQLTableSource from = query.getFrom();
 
         if (from instanceof SQLExprTableSource) {
@@ -87,7 +104,7 @@ public class MySqlMockExecuteHandlerImpl implements MockExecuteHandler {
         }
     }
 
-    public ResultSet showStatus(MockStatement statement) throws SQLException {
+    public ResultSet showStatus(MockStatementBase statement) throws SQLException {
         MockResultSet rs = new MockResultSet(statement);
         MockResultSetMetaData metaData = rs.getMockMetaData();
 
@@ -102,8 +119,8 @@ public class MySqlMockExecuteHandlerImpl implements MockExecuteHandler {
         return rs;
     }
 
-    public ResultSet executeQueryFromDual(MockStatement statement, SQLSelectQueryBlock query) throws SQLException {
-        MockResultSet rs = new MockResultSet(statement);
+    public ResultSet executeQueryFromDual(MockStatementBase statement, SQLSelectQueryBlock query) throws SQLException {
+        MockResultSet rs = statement.getConnection().getDriver().createMockResultSet(statement);
         MockResultSetMetaData metaData = rs.getMockMetaData();
 
         Object[] row = new Object[query.getSelectList().size()];
@@ -125,8 +142,8 @@ public class MySqlMockExecuteHandlerImpl implements MockExecuteHandler {
             } else if (expr instanceof SQLNCharExpr) {
                 row[i] = ((SQLNCharExpr) expr).getText();
                 column.setColumnType(Types.NVARCHAR);
-            } else if (expr instanceof MySqlBooleanExpr) {
-                row[i] = ((MySqlBooleanExpr) expr).getValue();
+            } else if (expr instanceof SQLBooleanExpr) {
+                row[i] = ((SQLBooleanExpr) expr).getValue();
                 column.setColumnType(Types.NVARCHAR);
             } else if (expr instanceof SQLNullExpr) {
                 row[i] = null;
@@ -138,9 +155,17 @@ public class MySqlMockExecuteHandlerImpl implements MockExecuteHandler {
                 } else {
                     throw new SQLException("TODO");
                 }
-
+            } else if (expr instanceof SQLVariantRefExpr) {
+                SQLVariantRefExpr varExpr = (SQLVariantRefExpr) expr;
+                int varIndex = varExpr.getIndex();
+                if (statement instanceof MockPreparedStatement) {
+                    MockPreparedStatement mockPstmt = (MockPreparedStatement) statement;
+                    row[i] = mockPstmt.getParameters().get(varIndex);
+                } else {
+                    row[i] = null;
+                }
             } else {
-                throw new SQLException("TODO");
+                row[i] = null;
             }
 
             metaData.getColumns().add(column);

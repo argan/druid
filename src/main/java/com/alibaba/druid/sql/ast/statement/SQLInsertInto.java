@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.sql.ast.statement;
 
 import java.util.ArrayList;
@@ -10,12 +25,12 @@ import com.alibaba.druid.sql.ast.statement.SQLInsertStatement.ValuesClause;
 
 public abstract class SQLInsertInto extends SQLObjectImpl {
 
-    private static final long     serialVersionUID = 1L;
     protected SQLExprTableSource  tableSource;
 
-    protected final List<SQLExpr> columns          = new ArrayList<SQLExpr>();
-    protected ValuesClause        values;
+    protected final List<SQLExpr> columns = new ArrayList<SQLExpr>();
     protected SQLSelect           query;
+    
+    protected List<ValuesClause>  valuesList = new ArrayList<ValuesClause>();
 
     public SQLInsertInto(){
 
@@ -34,6 +49,9 @@ public abstract class SQLInsertInto extends SQLObjectImpl {
     }
 
     public void setTableSource(SQLExprTableSource tableSource) {
+        if (tableSource != null) {
+            tableSource.setParent(this);
+        }
         this.tableSource = tableSource;
     }
 
@@ -60,12 +78,34 @@ public abstract class SQLInsertInto extends SQLObjectImpl {
     public List<SQLExpr> getColumns() {
         return columns;
     }
+    
+    public void addColumn(SQLExpr column) {
+        if (column != null) {
+            column.setParent(this);
+        }
+        this.columns.add(column);
+    }
 
     public ValuesClause getValues() {
-        return values;
+        if (valuesList.size() == 0) {
+            return null;
+        }
+        return valuesList.get(0);
     }
 
     public void setValues(ValuesClause values) {
-        this.values = values;
+        if (valuesList.size() == 0) {
+            valuesList.add(values);
+        } else {
+            valuesList.set(0, values);
+        }
+    }
+    
+    public List<ValuesClause> getValuesList() {
+        return valuesList;
+    }
+
+    public void setValuesList(List<ValuesClause> valuesList) {
+        this.valuesList = valuesList;
     }
 }

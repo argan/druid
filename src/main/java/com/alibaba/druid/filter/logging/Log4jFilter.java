@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,19 +19,14 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public class Log4jFilter extends LogFilter implements Log4jFilterMBean {
 
-    private String dataSourceLoggerName = "druid.sql.DataSource";
-    private String connectionLoggerName = "druid.sql.Connection";
-    private String statementLoggerName  = "druid.sql.Statement";
-    private String resultSetLoggerName  = "druid.sql.ResultSet";
-
-    private Logger dataSourceLogger     = Logger.getLogger(dataSourceLoggerName);
-    private Logger connectionLogger     = Logger.getLogger(connectionLoggerName);
-    private Logger statementLogger      = Logger.getLogger(statementLoggerName);
-    private Logger resultSetLogger      = Logger.getLogger(resultSetLoggerName);
+    private Logger dataSourceLogger = Logger.getLogger(dataSourceLoggerName);
+    private Logger connectionLogger = Logger.getLogger(connectionLoggerName);
+    private Logger statementLogger  = Logger.getLogger(statementLoggerName);
+    private Logger resultSetLogger  = Logger.getLogger(resultSetLoggerName);
 
     @Override
     public String getDataSourceLoggerName() {

@@ -1,3 +1,18 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.pool;
 
 import java.io.PrintWriter;
@@ -21,21 +36,15 @@ public class DruidDataSourceC3P0Adapter implements DataSource, DruidDataSourceC3
         dataSource = new DruidDataSource();
 
         // setDefault
-        this.setInitialPoolSize(3);
-        this.setAcquireIncrement(3);
-        this.setAcquireIncrement(30);
-        this.setAcquireRetryDelay(1000);
-        this.setAutoCommitOnClose(true);
-        this.setAutomaticTestTable(null);
-        this.setCheckoutTimeout(0);
-        this.setDebugUnreturnedConnectionStackTraces(false);
-        this.setMaxIdleTime(0);
-        this.setMaxPoolSize(15);
-        this.setMaxStatements(0);
-        this.setMaxStatementsPerConnection(0);
-        this.setMinPoolSize(3);
-        this.setTestConnectionOnCheckin(false);
-        this.setTestConnectionOnCheckout(false);
+        dataSource.setInitialSize(3);
+        acquireIncrement = 3;
+        dataSource.setTimeBetweenConnectErrorMillis(1000);
+        dataSource.setDefaultAutoCommit(true);
+        dataSource.setLogAbandoned(false);
+        dataSource.setMaxActive(15);
+        dataSource.setMinIdle(3);
+        dataSource.setTestOnReturn(false);
+        dataSource.setTestOnBorrow(false);
     }
 
     @Override
@@ -136,11 +145,11 @@ public class DruidDataSourceC3P0Adapter implements DataSource, DruidDataSourceC3
     }
 
     public int getCheckoutTimeout() {
-        return (int) dataSource.getMaxWait() / 1000;
+        return (int) dataSource.getMaxWait();
     }
 
     public void setCheckoutTimeout(int checkoutTimeout) {
-        dataSource.setMaxWait(checkoutTimeout * 1000);
+        dataSource.setMaxWait(checkoutTimeout);
     }
 
     public boolean isAutoCommitOnClose() {
@@ -181,7 +190,6 @@ public class DruidDataSourceC3P0Adapter implements DataSource, DruidDataSourceC3
 
     public void setMaxPoolSize(int maxPoolSize) {
         dataSource.setMaxActive(maxPoolSize);
-        dataSource.setMaxIdle(maxPoolSize);
     }
 
     public int getMinPoolSize() {
@@ -265,8 +273,6 @@ public class DruidDataSourceC3P0Adapter implements DataSource, DruidDataSourceC3
     }
 
     public void setMaxStatementsPerConnection(int maxStatementsPerConnection) {
-        dataSource.setPoolPreparedStatements(maxStatementsPerConnection > 0);
-            
         dataSource.setMaxPoolPreparedStatementPerConnectionSize(maxStatementsPerConnection);
     }
 
@@ -275,8 +281,6 @@ public class DruidDataSourceC3P0Adapter implements DataSource, DruidDataSourceC3
     }
 
     public void setMaxStatements(int maxStatements) {
-        dataSource.setPoolPreparedStatements(maxStatements > 0);
-        
         dataSource.setMaxOpenPreparedStatements(maxStatements);
     }
 
@@ -479,6 +483,6 @@ public class DruidDataSourceC3P0Adapter implements DataSource, DruidDataSourceC3
     }
 
     public Logger getParentLogger() throws SQLFeatureNotSupportedException {
-        throw new SQLFeatureNotSupportedException();
+        return dataSource.getParentLogger();
     }
 }

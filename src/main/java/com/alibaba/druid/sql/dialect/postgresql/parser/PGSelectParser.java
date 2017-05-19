@@ -1,12 +1,35 @@
+/*
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.alibaba.druid.sql.dialect.postgresql.parser;
 
+import java.util.List;
+
 import com.alibaba.druid.sql.ast.SQLExpr;
+import com.alibaba.druid.sql.ast.SQLLimit;
+import com.alibaba.druid.sql.ast.SQLParameter;
 import com.alibaba.druid.sql.ast.SQLSetQuantifier;
 import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
 import com.alibaba.druid.sql.ast.statement.SQLExprTableSource;
 import com.alibaba.druid.sql.ast.statement.SQLSelectQuery;
+import com.alibaba.druid.sql.ast.statement.SQLSelectQueryBlock;
+import com.alibaba.druid.sql.ast.statement.SQLTableSource;
+import com.alibaba.druid.sql.dialect.postgresql.ast.stmt.PGFunctionTableSource;
 import com.alibaba.druid.sql.dialect.postgresql.ast.stmt.PGSelectQueryBlock;
 import com.alibaba.druid.sql.dialect.postgresql.ast.stmt.PGSelectQueryBlock.IntoOption;
+import com.alibaba.druid.sql.dialect.postgresql.ast.stmt.PGValuesQuery;
 import com.alibaba.druid.sql.parser.ParserException;
 import com.alibaba.druid.sql.parser.SQLExprParser;
 import com.alibaba.druid.sql.parser.SQLSelectParser;
@@ -18,20 +41,45 @@ public class PGSelectParser extends SQLSelectParser {
         super(exprParser);
     }
 
-    public PGSelectParser(String sql) throws ParserException{
+    public PGSelectParser(String sql){
         this(new PGExprParser(sql));
     }
-    
+
     protected SQLExprParser createExprParser() {
         return new PGExprParser(lexer);
     }
 
     @Override
-    public SQLSelectQuery query() throws ParserException {
+    public SQLSelectQuery query() {
+        if (lexer.token() == Token.VALUES) {
+            lexer.nextToken();
+            accept(Token.LPAREN);
+            PGValuesQuery valuesQuery = new PGValuesQuery();
+            this.exprParser.exprList(valuesQuery.getValues(), valuesQuery);
+            accept(Token.RPAREN);
+            return queryRest(valuesQuery);
+        }
+
+        if (lexer.token() == Token.LPAREN) {
+            lexer.nextToken();
+
+            SQLSelectQuery select = query();
+            if (select instanceof SQLSelectQueryBlock) {
+                ((SQLSelectQueryBlock) select).setParenthesized(true);
+            }
+            accept(Token.RPAREN);
+
+            return queryRest(select);
+        }
+
         PGSelectQueryBlock queryBlock = new PGSelectQueryBlock();
 
         if (lexer.token() == Token.SELECT) {
             lexer.nextToken();
+
+            if (lexer.token() == Token.COMMENT) {
+                lexer.nextToken();
+            }
 
             if (lexer.token() == Token.DISTINCT) {
                 queryBlock.setDistionOption(SQLSetQuantifier.DISTINCT);
@@ -109,27 +157,34 @@ public class PGSelectParser extends SQLSelectParser {
 
         queryBlock.setOrderBy(this.createExprParser().parseOrderBy());
 
-        if (lexer.token() == Token.LIMIT) {
-            lexer.nextToken();
-            if (lexer.token() == Token.ALL) {
-                queryBlock.setLimit(new SQLIdentifierExpr("ALL"));
+        for (;;) {
+            if (lexer.token() == Token.LIMIT) {
+                SQLLimit limit = new SQLLimit();
+
                 lexer.nextToken();
-            } else {
-                SQLExpr limit = expr();
+                if (lexer.token() == Token.ALL) {
+                    limit.setRowCount(new SQLIdentifierExpr("ALL"));
+                    lexer.nextToken();
+                } else {
+                    limit.setRowCount(expr());
+                }
+
                 queryBlock.setLimit(limit);
-            }
-        }
-
-        if (lexer.token() == Token.OFFSET) {
-            lexer.nextToken();
-            SQLExpr offset = expr();
-            queryBlock.setOffset(offset);
-
-            if (lexer.token() == Token.ROW || lexer.token() == Token.ROWS) {
+            } else if (lexer.token() == Token.OFFSET) {
+                SQLLimit limit = queryBlock.getLimit();
+                if (limit == null) {
+                    limit = new SQLLimit();
+                    queryBlock.setLimit(limit);
+                }
                 lexer.nextToken();
+                SQLExpr offset = expr();
+                limit.setOffset(offset);
+
+                if (lexer.token() == Token.ROW || lexer.token() == Token.ROWS) {
+                    lexer.nextToken();
+                }
             } else {
-            	//TODO
-                //throw new ParserException("expect 'ROW' or 'ROWS'");
+                break;
             }
         }
 
@@ -170,22 +225,24 @@ public class PGSelectParser extends SQLSelectParser {
 
             if (lexer.token() == Token.UPDATE) {
                 forClause.setOption(PGSelectQueryBlock.ForClause.Option.UPDATE);
+                lexer.nextToken();
             } else if (lexer.token() == Token.SHARE) {
                 forClause.setOption(PGSelectQueryBlock.ForClause.Option.SHARE);
+                lexer.nextToken();
             } else {
                 throw new ParserException("expect 'FIRST' or 'NEXT'");
             }
 
-            accept(Token.OF);
-
-            for (;;) {
-                SQLExpr expr = this.createExprParser().expr();
-                forClause.getOf().add(expr);
-                if (lexer.token() == Token.COMMA) {
-                    lexer.nextToken();
-                    continue;
-                } else {
-                    break;
+            if (lexer.token() == Token.OF) {
+                for (;;) {
+                    SQLExpr expr = this.createExprParser().expr();
+                    forClause.getOf().add(expr);
+                    if (lexer.token() == Token.COMMA) {
+                        lexer.nextToken();
+                        continue;
+                    } else {
+                        break;
+                    }
                 }
             }
 
@@ -200,4 +257,52 @@ public class PGSelectParser extends SQLSelectParser {
         return queryRest(queryBlock);
     }
 
+    protected SQLTableSource parseTableSourceRest(SQLTableSource tableSource) {
+        if (lexer.token() == Token.AS && tableSource instanceof SQLExprTableSource) {
+            lexer.nextToken();
+
+            String alias = null;
+            if (lexer.token() == Token.IDENTIFIER) {
+                alias = lexer.stringVal();
+                lexer.nextToken();
+            }
+
+            if (lexer.token() == Token.LPAREN) {
+                SQLExprTableSource exprTableSource = (SQLExprTableSource) tableSource;
+
+                PGFunctionTableSource functionTableSource = new PGFunctionTableSource(exprTableSource.getExpr());
+                if (alias != null) {
+                    functionTableSource.setAlias(alias);
+                }
+                
+                lexer.nextToken();
+                parserParameters(functionTableSource.getParameters());
+                accept(Token.RPAREN);
+
+                return super.parseTableSourceRest(functionTableSource);
+            }
+        }
+
+        return super.parseTableSourceRest(tableSource);
+    }
+
+    private void parserParameters(List<SQLParameter> parameters) {
+        for (;;) {
+            SQLParameter parameter = new SQLParameter();
+
+            parameter.setName(this.exprParser.name());
+            parameter.setDataType(this.exprParser.parseDataType());
+
+            parameters.add(parameter);
+            if (lexer.token() == Token.COMMA || lexer.token() == Token.SEMI) {
+                lexer.nextToken();
+            }
+
+            if (lexer.token() != Token.BEGIN && lexer.token() != Token.RPAREN) {
+                continue;
+            }
+
+            break;
+        }
+    }
 }

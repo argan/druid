@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,10 @@ import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlASTVisitor;
 
 public class MySqlCommitStatement extends MySqlStatementImpl {
 
-    private static final long serialVersionUID = 1L;
+    private boolean work = false;
 
-    private boolean           work             = false;
-
-    private Boolean           chain;
-    private Boolean           release;
+    private Boolean chain;
+    private Boolean release;
 
     public Boolean getChain() {
         return chain;

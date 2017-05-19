@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@ package com.alibaba.druid.bvt.sql.mysql;
 
 import java.util.List;
 
+import org.junit.Assert;
+import junit.framework.TestCase;
+
 import com.alibaba.druid.sql.ast.SQLStatement;
 import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlOutputVisitor;
 import com.alibaba.druid.sql.parser.SQLStatementParser;
-
-import junit.framework.Assert;
-import junit.framework.TestCase;
 
 public class SHOW_COLUMNS_Syntax_Test extends TestCase {
 
@@ -51,6 +51,17 @@ public class SHOW_COLUMNS_Syntax_Test extends TestCase {
 
     public void test_2() throws Exception {
         String sql = "SHOW COLUMNS FROM mydb.mytable;";
+
+        SQLStatementParser parser = new MySqlStatementParser(sql);
+        List<SQLStatement> stmtList = parser.parseStatementList();
+
+        String text = output(stmtList);
+
+        Assert.assertEquals("SHOW COLUMNS FROM mydb.mytable;", text);
+    }
+    
+    public void test_3() throws Exception {
+        String sql = "SHOW COLUMNS FROM mytable IN mydb;";
 
         SQLStatementParser parser = new MySqlStatementParser(sql);
         List<SQLStatement> stmtList = parser.parseStatementList();

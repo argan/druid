@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@ import java.sql.Blob;
 import java.sql.CallableStatement;
 import java.sql.Clob;
 import java.sql.NClob;
+import java.sql.PreparedStatement;
 import java.sql.Ref;
+import java.sql.ResultSet;
 import java.sql.RowId;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
@@ -33,7 +35,7 @@ import java.util.Calendar;
 import com.alibaba.druid.proxy.jdbc.CallableStatementProxy;
 
 /**
- * @author wenshao<szujobs@hotmail.com>
+ * @author wenshao [szujobs@hotmail.com]
  */
 public class DruidPooledCallableStatement extends DruidPooledPreparedStatement implements CallableStatement {
 
@@ -41,7 +43,7 @@ public class DruidPooledCallableStatement extends DruidPooledPreparedStatement i
 
     public DruidPooledCallableStatement(DruidPooledConnection conn, PreparedStatementHolder holder) throws SQLException{
         super(conn, holder);
-        this.stmt = (CallableStatement) holder.getStatement();
+        this.stmt = (CallableStatement) holder.statement;
     }
 
     public CallableStatement getCallableStatementRaw() {
@@ -196,10 +198,24 @@ public class DruidPooledCallableStatement extends DruidPooledPreparedStatement i
     @Override
     public Object getObject(int parameterIndex) throws SQLException {
         try {
-            return stmt.getObject(parameterIndex);
+            Object obj = stmt.getObject(parameterIndex);
+            return wrapObject(obj);
         } catch (Throwable t) {
             throw checkException(t);
         }
+    }
+
+    private Object wrapObject(Object obj) {
+        if (obj instanceof ResultSet) {
+            ResultSet rs = (ResultSet) obj;
+            
+            DruidPooledResultSet poolableResultSet = new DruidPooledResultSet(this, rs);
+            addResultSetTrace(poolableResultSet);
+            
+            obj = poolableResultSet;
+        }
+        
+        return obj;
     }
 
     @Override
@@ -214,7 +230,8 @@ public class DruidPooledCallableStatement extends DruidPooledPreparedStatement i
     @Override
     public Object getObject(int parameterIndex, java.util.Map<String, Class<?>> map) throws SQLException {
         try {
-            return stmt.getObject(parameterIndex, map);
+            Object obj = stmt.getObject(parameterIndex, map);
+            return wrapObject(obj);
         } catch (Throwable t) {
             throw checkException(t);
         }
@@ -664,7 +681,8 @@ public class DruidPooledCallableStatement extends DruidPooledPreparedStatement i
     @Override
     public Object getObject(String parameterName) throws SQLException {
         try {
-            return stmt.getObject(parameterName);
+            Object obj = stmt.getObject(parameterName);
+            return wrapObject(obj);
         } catch (Throwable t) {
             throw checkException(t);
         }
@@ -682,7 +700,8 @@ public class DruidPooledCallableStatement extends DruidPooledPreparedStatement i
     @Override
     public Object getObject(String parameterName, java.util.Map<String, Class<?>> map) throws SQLException {
         try {
-            return stmt.getObject(parameterName, map);
+            Object obj = stmt.getObject(parameterName, map);
+            return wrapObject(obj);
         } catch (Throwable t) {
             throw checkException(t);
         }
@@ -1058,7 +1077,7 @@ public class DruidPooledCallableStatement extends DruidPooledPreparedStatement i
 
     @SuppressWarnings("unchecked")
     public <T> T unwrap(Class<T> iface) throws SQLException {
-        if (iface == CallableStatement.class) {
+        if (iface == CallableStatement.class || iface == PreparedStatement.class) {
             if (stmt instanceof CallableStatementProxy) {
                 return stmt.unwrap(iface);
             }

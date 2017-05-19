@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2011 Alibaba Group Holding Ltd.
+ * Copyright 1999-2017 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,19 +19,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
-import com.alibaba.druid.sql.ast.SQLObjectImpl;
 import com.alibaba.druid.sql.dialect.oracle.ast.OracleSQLObjectImpl;
 import com.alibaba.druid.sql.dialect.oracle.visitor.OracleASTVisitor;
 
 public class OracleSelectForUpdate extends OracleSQLObjectImpl {
 
-    private static final long   serialVersionUID = 1L;
+    private final List<SQLExpr> of         = new ArrayList<SQLExpr>();
 
-    private final List<SQLExpr> of               = new ArrayList<SQLExpr>();
-
-    private boolean             notWait          = false;
+    private boolean             notWait    = false;
     private SQLExpr             wait;
-    private boolean             skipLocked       = false;
+    private boolean             skipLocked = false;
 
     public OracleSelectForUpdate(){
 
@@ -72,17 +69,5 @@ public class OracleSelectForUpdate extends OracleSQLObjectImpl {
 
     public List<SQLExpr> getOf() {
         return this.of;
-    }
-
-    public static class SkipLock {
-    }
-
-    public static abstract class Type extends SQLObjectImpl {
-
-        private static final long serialVersionUID = 1L;
-
-        public Type(){
-
-        }
     }
 }
